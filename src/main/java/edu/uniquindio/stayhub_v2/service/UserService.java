@@ -33,6 +33,7 @@ public class UserService {
 
     @Transactional
     public UserSignupResponseDTO registerUser(@Valid UserSignupRequestDTO userSignupRequestDTO) {
+
         if (userRepository.findByEmail(userSignupRequestDTO.email()).isPresent()){
             log.error("Email already exists: {}", userSignupRequestDTO.email());
             throw new EmailAlreadyExistsException("Email already exists");
@@ -57,7 +58,7 @@ public class UserService {
         log.debug("User found with email: {}", user.getEmail());
 
         if (!passwordEncoder.matches(userLoginRequestDTO.password(), user.getPassword())){
-            log.warn("Invalid password attempt for email: {}", user.getEmail());
+            log.warn("Invalid login attempt detected");
             throw new InvalidPasswordException("Email or password invalid");
         }
         log.info("User logged in successfully: {}", user.getEmail());

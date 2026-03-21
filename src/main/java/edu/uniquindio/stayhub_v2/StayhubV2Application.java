@@ -7,9 +7,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 @EnableJpaAuditing
 @SpringBootApplication
 public class StayhubV2Application {
-
-	 static void main(String[] args) {
+	 public static void main(String[] args) {
 		 SpringApplication.run(StayhubV2Application.class, args);
 	}
-
 }
