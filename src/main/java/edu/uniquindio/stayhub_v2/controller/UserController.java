@@ -55,7 +55,7 @@ public class UserController {
     public ResponseEntity<TokenResponseDTO> loginUser(@Valid @RequestBody @Parameter(description = "User login credentials") UserLoginRequestDTO userLoginRequestDTO){
         log.info("Processing login request for email: {}", userLoginRequestDTO.email());
         TokenResponseDTO tokenResponse = userService.loginUser(userLoginRequestDTO);
-        log.debug("User logged in successfully: {}", userLoginRequestDTO.email());
+        log.debug("User logged in successfully with email and token: {}, {}", userLoginRequestDTO.email(), tokenResponse);
         return new ResponseEntity<>(tokenResponse, HttpStatus.OK);
     }
 }
