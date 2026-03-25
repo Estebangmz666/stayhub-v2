@@ -1,0 +1,263 @@
+openapi: 3.0.3
+info:
+  title: StayHub v2 API
+  version: 1.0.0
+  description: OpenAPI spec generated from the current implemented controllers in StayHub v2.
+servers:
+  - url: http://localhost:8080
+    description: Local server
+paths:
+  /api/v2/users/auth/signup:
+    post:
+      tags:
+        - Users
+      summary: Register a new user
+      operationId: signupUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserSignupRequest'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSignupResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v2/users/auth/login:
+    post:
+      tags:
+        - Users
+      summary: Login user
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserLoginRequest'
+      responses:
+        '200':
+          description: User logged in successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v2/accommodations/{id}:
+    get:
+      tags:
+        - Accommodations
+      summary: Get accommodation by id
+      operationId: getAccommodationById
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: Accommodation id
+      responses:
+        '200':
+          description: Accommodation retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccommodationGetByIdResponse'
+        '404':
+          description: Accommodation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Invalid login attempt detected
+        code:
+          type: integer
+          example: 401
+      required:
+        - message
+        - code
+    TokenResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          example: eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ1c2VyQGV4YW1wbGUuY29tIiwiZXhwIjoxNzI1ODk4MDAwfQ.abc
+      required:
+        - token
+    UserSignupRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 100
+          example: john.doe@example.com
+        password:
+          type: string
+          pattern: ^(?=.*[A-Z])(?=.*\\d).{8,}$
+          example: P@ssw0rd123
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+          uniqueItems: true
+          example:
+            - GUEST
+            - HOST
+        fullName:
+          type: string
+          maxLength: 100
+          example: John Giggity Doe
+        phoneNumber:
+          type: string
+          pattern: ^\\+57\\s?\\d{10}$
+          example: +573101234567
+        birthDate:
+          type: string
+          format: date
+          example: 1990-01-01
+        profilePicture:
+          type: string
+          format: uri
+          example: https://example.com/profile.jpg
+      required:
+        - email
+        - password
+        - roles
+        - fullName
+        - phoneNumber
+        - birthDate
+    UserSignupResponse:
+      allOf:
+        - $ref: '#/components/schemas/UserSignupRequest'
+    UserLoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: john.doe@example.com
+        password:
+          type: string
+          example: P@ssw0rd123
+      required:
+        - email
+        - password
+    AccommodationGetByIdResponse:
+      type: object
+      properties:
+        host:
+          $ref: '#/components/schemas/User'
+        title:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 1000
+        capacity:
+          type: integer
+          minimum: 1
+        pricePerNight:
+          type: number
+          format: double
+        mainImage:
+          type: string
+          format: uri
+        locationDescription:
+          type: string
+          maxLength: 100
+        city:
+          type: string
+          maxLength: 100
+        images:
+          type: array
+          items:
+            type: string
+            format: uri
+        available:
+          type: boolean
+      required:
+        - host
+        - title
+        - description
+        - capacity
+        - pricePerNight
+        - locationDescription
+        - city
+        - images
+        - available
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+          uniqueItems: true
+        fullName:
+          type: string
+        phoneNumber:
+          type: string
+        birthDate:
+          type: string
+          format: date
+        deleted:
+          type: boolean
+        profilePicture:
+          type: string
+          format: uri
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Role:
+      type: string
+      enum:
+        - GUEST
+        - HOST

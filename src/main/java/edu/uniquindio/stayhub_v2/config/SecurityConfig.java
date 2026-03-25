@@ -38,7 +38,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
-                                "/v3/api-docs/**"
+                                "/v3/api-docs/**",
+                                "/openapi.yaml"
                         ).permitAll()
                         // Auth público
                         .requestMatchers("/api/auth/**").permitAll()
