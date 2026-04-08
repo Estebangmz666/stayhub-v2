@@ -37,7 +37,7 @@ public record UserSignupRequestDTO(
         String email,
 
         @NotBlank(message = "Password is required")
-        @Pattern(regexp = "^(?=.*[A-Z])(?=.*\\\\d).{8,}$", message = "Password must be at least 8 characters with uppercase and numbers")
+        @Pattern(regexp = "^(?=.*[A-Z])(?=.*\\d).{8,}$", message = "Password must be at least 8 characters with uppercase and numbers")
         @Schema(description = "The user's password", example = "P@ssw0rd123")
         String password,
 
