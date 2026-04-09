@@ -7,11 +7,16 @@ import edu.uniquindio.stayhub_v2.dto.user.UserSignupRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.user.UserSignupResponseDTO;
 import edu.uniquindio.stayhub_v2.exception.InvalidPasswordException;
 import edu.uniquindio.stayhub_v2.exception.UserNotFoundException;
+import edu.uniquindio.stayhub_v2.dto.auth.ForgotPasswordRequestDTO;
+import edu.uniquindio.stayhub_v2.dto.auth.ResetPasswordRequestDTO;
+import edu.uniquindio.stayhub_v2.exception.InvalidRecoveryCodeException;
 import edu.uniquindio.stayhub_v2.mapper.UserMapper;
 import edu.uniquindio.stayhub_v2.model.User;
 import edu.uniquindio.stayhub_v2.repository.UserRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import java.time.LocalDateTime;
+import java.util.Random;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -30,6 +35,7 @@ public class UserService {
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
     private final JWTService jwtService;
+    private final EmailService emailService;
 
     @Transactional
     public UserSignupResponseDTO registerUser(@Valid UserSignupRequestDTO userSignupRequestDTO) {
@@ -66,5 +72,50 @@ public class UserService {
         String token = jwtService.generateToken(user);
         log.debug("JWT token generated for user: {}", user.getEmail());
         return new TokenResponseDTO(token);
+    }
+
+    @Transactional
+    public void forgotPassword(@Valid ForgotPasswordRequestDTO requestDTO){
+        User user = userRepository.findByEmail(requestDTO.email())
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+        
+        String code = generateRecoveryCode();
+        user.setPasswordRecoveryCode(code);
+        user.setPasswordRecoveryExpiration(LocalDateTime.now().plusMinutes(15));
+        userRepository.save(user);
+
+        String text = "Hola " + user.getFullName() + ",\n\n" +
+                "Has solicitado recuperar tu contraseña. Usa el siguiente código para reestablecerla:\n\n" +
+                "Código: " + code + "\n\n" +
+                "Este código es válido por 15 minutos.";
+
+        emailService.sendEmail(user.getEmail(), "Recuperación de contraseña", text);
+        log.info("Recovery code sent to {}", user.getEmail());
+    }
+
+    @Transactional
+    public void resetPassword(@Valid ResetPasswordRequestDTO requestDTO){
+        User user = userRepository.findByEmail(requestDTO.email())
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+
+        if(user.getPasswordRecoveryCode() == null || !user.getPasswordRecoveryCode().equals(requestDTO.code())){
+            throw new InvalidRecoveryCodeException("El código de recuperación es inválido");
+        }
+
+        if(user.getPasswordRecoveryExpiration().isBefore(LocalDateTime.now())){
+            throw new InvalidRecoveryCodeException("El código de recuperación ha expirado");
+        }
+
+        user.setPassword(passwordEncoder.encode(requestDTO.newPassword()));
+        user.setPasswordRecoveryCode(null);
+        user.setPasswordRecoveryExpiration(null);
+
+        userRepository.save(user);
+        log.info("Password successfully reset for {}", user.getEmail());
+    }
+
+    private String generateRecoveryCode(){
+        int code = 100000 + new Random().nextInt(900000);
+        return String.valueOf(code);
     }
 }

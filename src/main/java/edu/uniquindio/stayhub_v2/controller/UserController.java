@@ -1,5 +1,8 @@
 package edu.uniquindio.stayhub_v2.controller;
 
+import edu.uniquindio.stayhub_v2.dto.auth.ForgotPasswordRequestDTO;
+import edu.uniquindio.stayhub_v2.dto.auth.MessageResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.auth.ResetPasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.auth.TokenResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.user.UserLoginRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.user.UserSignupRequestDTO;
@@ -93,5 +96,53 @@ public class UserController {
         TokenResponseDTO tokenResponse = userService.loginUser(userLoginRequestDTO);
         log.debug("User logged in successfully with email: {}", userLoginRequestDTO.email());
         return new ResponseEntity<>(tokenResponse, HttpStatus.OK);
+    }
+
+    @Operation(summary = "Forgot password", description = "Generates a recovery code and sends it via email")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Recovery code sent successfully",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = MessageResponseDTO.class),
+                            examples = @ExampleObject(
+                                    value = "{\\\"message\\\": \\\"Código de recuperación enviado\\\"}")
+                    )
+            ),
+            @ApiResponse(responseCode = "401", description = "User not found",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class)
+                    )
+            )
+    })
+    @PostMapping("auth/forgot-password")
+    public ResponseEntity<MessageResponseDTO> forgotPassword(@Valid @RequestBody @Parameter(description = "User's email") ForgotPasswordRequestDTO requestDTO){
+        log.info("Processing forgot password request for email: {}", requestDTO.email());
+        userService.forgotPassword(requestDTO);
+        return new ResponseEntity<>(new MessageResponseDTO("Código de recuperación enviado"), HttpStatus.OK);
+    }
+
+    @Operation(summary = "Reset password", description = "Resets user password using a recovery code")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Password reset successfully",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = MessageResponseDTO.class),
+                            examples = @ExampleObject(
+                                    value = "{\\\"message\\\": \\\"Contraseña restablecida exitosamente\\\"}")
+                    )
+            ),
+            @ApiResponse(responseCode = "400", description = "Invalid or expired recovery code",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class)
+                    )
+            )
+    })
+    @PostMapping("auth/reset-password")
+    public ResponseEntity<MessageResponseDTO> resetPassword(@Valid @RequestBody @Parameter(description = "Reset password details") ResetPasswordRequestDTO requestDTO){
+        log.info("Processing reset password request for email: {}", requestDTO.email());
+        userService.resetPassword(requestDTO);
+        return new ResponseEntity<>(new MessageResponseDTO("Contraseña restablecida exitosamente"), HttpStatus.OK);
     }
 }

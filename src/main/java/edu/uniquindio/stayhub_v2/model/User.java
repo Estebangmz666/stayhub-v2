@@ -105,6 +105,18 @@ public class User extends Auditable{
     @Column
     private String profilePicture;
 
+    /**
+     * Code for recovering the password
+     */
+    @Column(name = "password_recovery_code", length = 6)
+    private String passwordRecoveryCode;
+
+    /**
+     * Expiration date and time for the recovery code
+     */
+    @Column(name = "password_recovery_expiration")
+    private java.time.LocalDateTime passwordRecoveryExpiration;
+
     /*
     TO-DO: CAMBIAR RELACIÓN: USUARIO NO TIENE PROPIEDAD, PROPIEDAD ES DE USUARIO
     private Set<Accommodation> accommodations = new HashSet<>();

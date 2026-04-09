@@ -92,6 +92,58 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/v2/users/auth/forgot-password:
+    post:
+      tags:
+        - Users
+      summary: Forgot password
+      description: Generates a recovery code and sends it via email
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '200':
+          description: Recovery code sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v2/users/auth/reset-password:
+    post:
+      tags:
+        - Users
+      summary: Reset password
+      description: Resets user password using a recovery code
+      operationId: resetPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: Password reset successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Invalid or expired recovery code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 components:
   securitySchemes:
     bearerAuth:
@@ -261,3 +313,38 @@ components:
       enum:
         - GUEST
         - HOST
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Operación realizada exitosamente
+      required:
+        - message
+    ForgotPasswordRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: john.doe@example.com
+      required:
+        - email
+    ResetPasswordRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: john.doe@example.com
+        code:
+          type: string
+          example: "123456"
+        newPassword:
+          type: string
+          pattern: ^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=!])(?=\S+$).{8,}$
+          example: NewP@ssw0rd!
+      required:
+        - email
+        - code
+        - newPassword

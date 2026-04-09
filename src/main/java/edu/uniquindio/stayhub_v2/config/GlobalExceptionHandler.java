@@ -24,6 +24,15 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(edu.uniquindio.stayhub_v2.exception.InvalidRecoveryCodeException.class)
+    public ResponseEntity<Error> handleInvalidRecoveryCodeException(edu.uniquindio.stayhub_v2.exception.InvalidRecoveryCodeException e){
+        log.warn("Invalid recovery code: {}", e.getMessage());
+        return new ResponseEntity<>(
+                new Error(e.getMessage(), HttpStatus.BAD_REQUEST.value()),
+                HttpStatus.BAD_REQUEST
+        );
+    }
+
     @ExceptionHandler(AccommodationNotFoundException.class)
     public ResponseEntity<Error> handleAccommodationNotFoundException(AccommodationNotFoundException e){
         log.warn("Accommodation not found");
