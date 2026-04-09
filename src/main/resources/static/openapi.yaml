@@ -90,6 +90,46 @@ paths:
           description: Accommodation not found
           content:
             application/json:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+        - Accommodations
+      summary: Deactivate accommodation
+      description: Soft deletes an accommodation if it has no future active reservations, validating if user is the owner.
+      operationId: deactivateAccommodation
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: Accommodation id
+      responses:
+        '200':
+          description: Accommodation deactivated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Active future reservations exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Unauthorized action, user is not the owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Accommodation not found
+          content:
+            application/json:
               schema:
                 $ref: '#/components/schemas/Error'
   /api/v2/users/auth/forgot-password:

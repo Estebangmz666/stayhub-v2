@@ -84,4 +84,24 @@ public class JWTService {
             throw e;
         }
     }
+
+    /**
+     * Extacts the user's email from the JWT Subject
+     *
+     * @param token The JWT token to extract from.
+     * @return The user email.
+     */
+    public String getEmailFromToken(String token) {
+        log.info("Extracting email from token");
+        // Remove Bearer prefix if present
+        if(token != null && token.startsWith("Bearer ")){
+            token = token.substring(7);
+        }
+        return Jwts.parser()
+                .verifyWith(SECRET_KEY)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .getSubject();
+    }
 }

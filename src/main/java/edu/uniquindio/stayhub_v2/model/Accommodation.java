@@ -118,8 +118,8 @@ public class Accommodation extends Auditable{
      * A list of reservations made for this accommodation.
      * This is a one-to-many relationship with the Reservation entity.
      */
-//    @OneToMany(mappedBy = "accommodation")
-//    private List<Reservation> reservations;
+    @jakarta.persistence.OneToMany(mappedBy = "accommodation")
+    private List<Reservation> reservations;
 
     /**
      * A list of comments made about this accommodation.

@@ -1,7 +1,9 @@
 package edu.uniquindio.stayhub_v2.controller;
 
 import edu.uniquindio.stayhub_v2.dto.accommodation.AccommodationGetByIdResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.auth.MessageResponseDTO;
 import edu.uniquindio.stayhub_v2.service.AccommodationService;
+import edu.uniquindio.stayhub_v2.service.JWTService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -17,6 +19,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Accommodation management", description = "Endpoints for managing accommodations")
@@ -27,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AccommodationController {
 
     private final AccommodationService accommodationService;
+    private final JWTService jwtService;
 
     @Operation(summary = "Get accommodation by ID", description = "Retrieves an accommodation by its ID")
     @ApiResponses(value = {
@@ -48,5 +53,44 @@ public class AccommodationController {
         AccommodationGetByIdResponseDTO response = accommodationService.getAccommodation(id);
         log.debug("Accommodation retrieved successfully with title: {}", response.title());
         return new ResponseEntity<>(response, HttpStatus.OK);
+    }
+
+    @Operation(summary = "Deactivate accommodation", description = "Soft deletes an accommodation if it has no future active reservations, validating if user is the owner.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Accommodation deactivated successfully",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = MessageResponseDTO.class),
+                            examples = @ExampleObject(
+                                    value = "{\\\"message\\\": \\\"Alojamiento dado de baja con éxito.\\\"}")
+                    )
+            ),
+            @ApiResponse(responseCode = "400", description = "Active future reservations exist",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class)
+                    )
+            ),
+            @ApiResponse(responseCode = "403", description = "Unauthorized action, user is not the owner",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class)
+                    )
+            ),
+            @ApiResponse(responseCode = "404", description = "Accommodation not found",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class)
+                    )
+            )
+    })
+    @DeleteMapping("/{id}")
+    public ResponseEntity<MessageResponseDTO> deactivateAccommodation(
+            @PathVariable @Parameter(description = "Accommodation ID", required = true) Long id,
+            @RequestHeader("Authorization") String token) {
+        log.info("Request to deactivate accommodation with ID: {}", id);
+        String requesterEmail = jwtService.getEmailFromToken(token);
+        accommodationService.deactivateAccommodation(id, requesterEmail);
+        return new ResponseEntity<>(new MessageResponseDTO("Alojamiento dado de baja con éxito."), HttpStatus.OK);
     }
 }

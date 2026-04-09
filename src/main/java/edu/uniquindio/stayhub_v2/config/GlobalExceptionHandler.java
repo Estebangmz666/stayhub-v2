@@ -33,6 +33,24 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(edu.uniquindio.stayhub_v2.exception.UnauthorizedHostException.class)
+    public ResponseEntity<Error> handleUnauthorizedHostException(edu.uniquindio.stayhub_v2.exception.UnauthorizedHostException e){
+        log.warn("Unauthorized host action: {}", e.getMessage());
+        return new ResponseEntity<>(
+                new Error(e.getMessage(), HttpStatus.FORBIDDEN.value()),
+                HttpStatus.FORBIDDEN
+        );
+    }
+
+    @ExceptionHandler(edu.uniquindio.stayhub_v2.exception.ActiveReservationsException.class)
+    public ResponseEntity<Error> handleActiveReservationsException(edu.uniquindio.stayhub_v2.exception.ActiveReservationsException e){
+        log.warn("Active reservations prevent action: {}", e.getMessage());
+        return new ResponseEntity<>(
+                new Error(e.getMessage(), HttpStatus.BAD_REQUEST.value()),
+                HttpStatus.BAD_REQUEST
+        );
+    }
+
     @ExceptionHandler(AccommodationNotFoundException.class)
     public ResponseEntity<Error> handleAccommodationNotFoundException(AccommodationNotFoundException e){
         log.warn("Accommodation not found");
