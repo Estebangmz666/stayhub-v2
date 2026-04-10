@@ -4,10 +4,12 @@ import edu.uniquindio.stayhub_v2.dto.auth.ForgotPasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.auth.MessageResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.auth.ResetPasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.auth.TokenResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.auth.ChangePasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.user.UserLoginRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.user.UserSignupRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.user.UserSignupResponseDTO;
 import edu.uniquindio.stayhub_v2.service.UserService;
+import edu.uniquindio.stayhub_v2.service.JWTService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -22,7 +24,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -33,6 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 public class UserController {
     private final UserService userService;
+    private final JWTService jwtService;
 
     @Operation(summary = "Register a new user", description = "Registers a new user with the provided details")
     @ApiResponses(value = {
@@ -144,5 +149,38 @@ public class UserController {
         log.info("Processing reset password request for email: {}", requestDTO.email());
         userService.resetPassword(requestDTO);
         return new ResponseEntity<>(new MessageResponseDTO("Contraseña restablecida exitosamente"), HttpStatus.OK);
+    }
+
+    @Operation(summary = "Change password", description = "Changes user's password requiring the current password")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Password changed successfully",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = MessageResponseDTO.class),
+                            examples = @ExampleObject(
+                                    value = "{\\\"message\\\": \\\"Contraseña cambiada exitosamente\\\"}")
+                    )
+            ),
+            @ApiResponse(responseCode = "400", description = "Validation or rules error",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class)
+                    )
+            ),
+            @ApiResponse(responseCode = "401", description = "Invalid current password",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class)
+                    )
+            )
+    })
+    @PutMapping("auth/change-password")
+    public ResponseEntity<MessageResponseDTO> changePassword(
+            @Valid @RequestBody ChangePasswordRequestDTO requestDTO,
+            @RequestHeader("Authorization") String token) {
+        log.info("Processing change password request");
+        String requesterEmail = jwtService.getEmailFromToken(token);
+        userService.changePassword(requesterEmail, requestDTO);
+        return new ResponseEntity<>(new MessageResponseDTO("Contraseña cambiada exitosamente"), HttpStatus.OK);
     }
 }

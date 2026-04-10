@@ -184,6 +184,40 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/v2/users/auth/change-password:
+    put:
+      tags:
+        - Users
+      summary: Change password
+      description: Changes user's password requiring the current password
+      operationId: changePassword
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Validation or rules error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Invalid current password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 components:
   securitySchemes:
     bearerAuth:
@@ -387,4 +421,17 @@ components:
       required:
         - email
         - code
+        - newPassword
+    ChangePasswordRequest:
+      type: object
+      properties:
+        currentPassword:
+          type: string
+          example: OldP@ssw0rd123
+        newPassword:
+          type: string
+          pattern: ^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=!])(?=\S+$).{8,}$
+          example: NewP@ssw0rd!
+      required:
+        - currentPassword
         - newPassword

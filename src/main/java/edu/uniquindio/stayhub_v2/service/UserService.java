@@ -9,6 +9,7 @@ import edu.uniquindio.stayhub_v2.exception.InvalidPasswordException;
 import edu.uniquindio.stayhub_v2.exception.UserNotFoundException;
 import edu.uniquindio.stayhub_v2.dto.auth.ForgotPasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.auth.ResetPasswordRequestDTO;
+import edu.uniquindio.stayhub_v2.dto.auth.ChangePasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.exception.InvalidRecoveryCodeException;
 import edu.uniquindio.stayhub_v2.mapper.UserMapper;
 import edu.uniquindio.stayhub_v2.model.User;
@@ -112,6 +113,21 @@ public class UserService {
 
         userRepository.save(user);
         log.info("Password successfully reset for {}", user.getEmail());
+    }
+
+    @Transactional
+    public void changePassword(String email, @Valid ChangePasswordRequestDTO requestDTO) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+
+        if (!passwordEncoder.matches(requestDTO.currentPassword(), user.getPassword())) {
+            log.warn("Invalid current password attempt for changing password");
+            throw new InvalidPasswordException("La contraseña actual es incorrecta");
+        }
+
+        user.setPassword(passwordEncoder.encode(requestDTO.newPassword()));
+        userRepository.save(user);
+        log.info("Password successfully changed for {}", user.getEmail());
     }
 
     private String generateRecoveryCode(){
