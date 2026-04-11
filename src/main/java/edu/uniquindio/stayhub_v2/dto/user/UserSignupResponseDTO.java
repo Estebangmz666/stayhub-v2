@@ -15,7 +15,7 @@ import java.util.Set;
 
 /**
  * Data Transfer Object for user registration.
- * This DTO contains all the necessary information to create a new user account.
+ * This DTO contains all the necessary information to respond frontend with user data.
  *
  * @param email The user's email address. It must be unique and in a valid format.
  * @param password The user's password. It must meet complexity requirements: at least 8 characters, including an uppercase letter and a number.

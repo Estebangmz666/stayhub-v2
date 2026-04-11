@@ -15,7 +15,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -39,11 +39,10 @@ public class AccommodationServiceTest {
     private AccommodationService accommodationService;
 
     private Accommodation testAccommodation;
-    private User hostUser;
 
     @BeforeEach
     void setUp() {
-        hostUser = User.builder()
+        User hostUser = User.builder()
                 .id(1L)
                 .email("host@example.com")
                 .build();
@@ -60,7 +59,7 @@ public class AccommodationServiceTest {
     void deactivateAccommodation_Successful() {
         when(accommodationRepository.findByIdAndDeletedFalse(100L)).thenReturn(Optional.of(testAccommodation));
         when(reservationRepository.existsByAccommodationIdAndStartDateAfterAndStatus(
-                eq(100L), any(LocalDate.class), eq(ReservationStatus.ACTIVE))).thenReturn(false);
+                eq(100L), any(LocalDateTime.class), eq(ReservationStatus.ACTIVE))).thenReturn(false);
 
         accommodationService.deactivateAccommodation(100L, "host@example.com");
 
@@ -86,7 +85,7 @@ public class AccommodationServiceTest {
     void deactivateAccommodation_ActiveReservationsExist_ThrowsException() {
         when(accommodationRepository.findByIdAndDeletedFalse(100L)).thenReturn(Optional.of(testAccommodation));
         when(reservationRepository.existsByAccommodationIdAndStartDateAfterAndStatus(
-                eq(100L), any(LocalDate.class), eq(ReservationStatus.ACTIVE))).thenReturn(true);
+                eq(100L), any(LocalDateTime.class), eq(ReservationStatus.ACTIVE))).thenReturn(true);
 
         assertThatThrownBy(() -> accommodationService.deactivateAccommodation(100L, "host@example.com"))
                 .isInstanceOf(ActiveReservationsException.class)
