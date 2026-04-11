@@ -3,6 +3,7 @@ package edu.uniquindio.stayhub_v2.service;
 import edu.uniquindio.stayhub_v2.dto.auth.ForgotPasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.auth.ResetPasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.auth.TokenResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.auth.ChangePasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.user.UserLoginRequestDTO;
 import edu.uniquindio.stayhub_v2.exception.InvalidPasswordException;
 import edu.uniquindio.stayhub_v2.exception.InvalidRecoveryCodeException;
@@ -23,7 +24,6 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -100,7 +100,7 @@ public class UserServiceTest {
         assertThat(testUser.getPasswordRecoveryCode()).isNotNull();
         assertThat(testUser.getPasswordRecoveryCode()).hasSize(6);
         assertThat(testUser.getPasswordRecoveryExpiration()).isAfter(LocalDateTime.now().minusMinutes(1));
-        
+
         verify(userRepository).save(testUser);
         verify(emailService).sendEmail(eq(testUser.getEmail()), anyString(), anyString());
     }
@@ -109,7 +109,7 @@ public class UserServiceTest {
     void resetPassword_ValidCodeAndNotExpired_UpdatesPassword() {
         testUser.setPasswordRecoveryCode("123456");
         testUser.setPasswordRecoveryExpiration(LocalDateTime.now().plusMinutes(10));
-        
+
         ResetPasswordRequestDTO request = new ResetPasswordRequestDTO("test@mail.com", "123456", "NewPassword123!");
         when(userRepository.findByEmail(request.email())).thenReturn(Optional.of(testUser));
         when(passwordEncoder.encode(request.newPassword())).thenReturn("new_encoded_password");
@@ -119,7 +119,7 @@ public class UserServiceTest {
         assertThat(testUser.getPassword()).isEqualTo("new_encoded_password");
         assertThat(testUser.getPasswordRecoveryCode()).isNull();
         assertThat(testUser.getPasswordRecoveryExpiration()).isNull();
-        
+
         verify(userRepository).save(testUser);
     }
 
@@ -127,7 +127,7 @@ public class UserServiceTest {
     void resetPassword_InvalidCode_ThrowsException() {
         testUser.setPasswordRecoveryCode("123456");
         testUser.setPasswordRecoveryExpiration(LocalDateTime.now().plusMinutes(10));
-        
+
         ResetPasswordRequestDTO request = new ResetPasswordRequestDTO("test@mail.com", "999999", "NewPassword123!");
         when(userRepository.findByEmail(request.email())).thenReturn(Optional.of(testUser));
 
@@ -140,12 +140,36 @@ public class UserServiceTest {
     void resetPassword_ExpiredCode_ThrowsException() {
         testUser.setPasswordRecoveryCode("123456");
         testUser.setPasswordRecoveryExpiration(LocalDateTime.now().minusMinutes(1));
-        
+
         ResetPasswordRequestDTO request = new ResetPasswordRequestDTO("test@mail.com", "123456", "NewPassword123!");
         when(userRepository.findByEmail(request.email())).thenReturn(Optional.of(testUser));
 
         assertThatThrownBy(() -> userService.resetPassword(request))
                 .isInstanceOf(InvalidRecoveryCodeException.class)
                 .hasMessageContaining("expirado");
+    }
+
+    @Test
+    void changePassword_ValidCurrentPassword_UpdatesPassword() {
+        ChangePasswordRequestDTO request = new ChangePasswordRequestDTO("OldPassword123!", "NewPassword123!");
+        when(userRepository.findByEmail(testUser.getEmail())).thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches(request.currentPassword(), testUser.getPassword())).thenReturn(true);
+        when(passwordEncoder.encode(request.newPassword())).thenReturn("new_encoded_password");
+
+        userService.changePassword(testUser.getEmail(), request);
+
+        assertThat(testUser.getPassword()).isEqualTo("new_encoded_password");
+        verify(userRepository).save(testUser);
+    }
+
+    @Test
+    void changePassword_InvalidCurrentPassword_ThrowsException() {
+        ChangePasswordRequestDTO request = new ChangePasswordRequestDTO("WrongPassword!", "NewPassword123!");
+        when(userRepository.findByEmail(testUser.getEmail())).thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches(request.currentPassword(), testUser.getPassword())).thenReturn(false);
+
+        assertThatThrownBy(() -> userService.changePassword(testUser.getEmail(), request))
+                .isInstanceOf(InvalidPasswordException.class)
+                .hasMessageContaining("contraseña actual es incorrecta");
     }
 }
