@@ -3,6 +3,8 @@ package edu.uniquindio.stayhub_v2.service;
 import edu.uniquindio.stayhub_v2.exception.AccommodationNotFoundException;
 import edu.uniquindio.stayhub_v2.exception.ActiveReservationsException;
 import edu.uniquindio.stayhub_v2.exception.UnauthorizedHostException;
+import edu.uniquindio.stayhub_v2.dto.accommodation.AccommodationGetByIdResponseDTO;
+import edu.uniquindio.stayhub_v2.mapper.AccommodationMapper;
 import edu.uniquindio.stayhub_v2.model.Accommodation;
 import edu.uniquindio.stayhub_v2.model.ReservationStatus;
 import edu.uniquindio.stayhub_v2.model.User;
@@ -34,6 +36,9 @@ public class AccommodationServiceTest {
 
     @Mock
     private ReservationRepository reservationRepository;
+
+    @Mock
+    private AccommodationMapper accommodationMapper;
 
     @InjectMocks
     private AccommodationService accommodationService;
@@ -102,5 +107,27 @@ public class AccommodationServiceTest {
 
         assertThatThrownBy(() -> accommodationService.deactivateAccommodation(999L, "host@example.com"))
                 .isInstanceOf(AccommodationNotFoundException.class);
+    }
+
+    @Test
+    void getAccommodation_Successful() {
+        AccommodationGetByIdResponseDTO mockResponse = new AccommodationGetByIdResponseDTO(
+                null, "Title", "Desc", 4, new java.math.BigDecimal("100"), "main.jpg", "loc", "city", java.util.List.of(), true);
+        when(accommodationRepository.findByIdAndDeletedFalse(100L)).thenReturn(Optional.of(testAccommodation));
+        when(accommodationMapper.toAccommodationGetByIdResponseDTO(testAccommodation)).thenReturn(mockResponse);
+
+        AccommodationGetByIdResponseDTO response = accommodationService.getAccommodation(100L);
+
+        assertThat(response).isNotNull();
+        assertThat(response.title()).isEqualTo("Title");
+    }
+
+    @Test
+    void getAccommodation_NotFound_ThrowsException() {
+        when(accommodationRepository.findByIdAndDeletedFalse(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> accommodationService.getAccommodation(999L))
+                .isInstanceOf(AccommodationNotFoundException.class)
+                .hasMessageContaining("No se encontró ninguna casa con ese código");
     }
 }

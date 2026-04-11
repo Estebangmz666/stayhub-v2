@@ -31,7 +31,7 @@ public class AccommodationService {
     public AccommodationGetByIdResponseDTO getAccommodation(Long id){
         Accommodation accommodation = accommodationRepository
                 .findByIdAndDeletedFalse(id)
-                .orElseThrow(() -> new AccommodationNotFoundException("Accommodation not found with id: " + id));
+                .orElseThrow(() -> new AccommodationNotFoundException("No se encontró ninguna casa con ese código"));
         return accommodationMapper.toAccommodationGetByIdResponseDTO(accommodation);
     }
 
@@ -40,7 +40,7 @@ public class AccommodationService {
         log.info("Request to deactivate accommodation {} by user {}", id, requesterEmail);
         
         Accommodation accommodation = accommodationRepository.findByIdAndDeletedFalse(id)
-                .orElseThrow(() -> new AccommodationNotFoundException("Accommodation not found with id: " + id));
+                .orElseThrow(() -> new AccommodationNotFoundException("No se encontró ninguna casa con ese código"));
 
         if (!accommodation.getHost().getEmail().equals(requesterEmail)) {
             log.warn("User {} attempted to deactivate accommodation {} without ownership", requesterEmail, id);
