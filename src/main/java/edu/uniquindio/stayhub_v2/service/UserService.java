@@ -1,6 +1,7 @@
 package edu.uniquindio.stayhub_v2.service;
 
 import edu.uniquindio.stayhub_v2.config.JwtAuthenticationFilter;
+import edu.uniquindio.stayhub_v2.dto.auth.ChangePasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.auth.ForgotPasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.auth.ResetPasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.auth.TokenResponseDTO;
@@ -484,6 +485,21 @@ public class UserService {
                 Saludos,
                 El equipo de StayHub 🏡
                \s""", fullName, code);
+    }
+
+    @Transactional
+    public void changePassword(String email, @Valid ChangePasswordRequestDTO requestDTO) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+
+        if (!passwordEncoder.matches(requestDTO.currentPassword(), user.getPassword())) {
+            log.warn("Invalid current password attempt for changing password");
+            throw new InvalidPasswordException("La contraseña actual es incorrecta");
+        }
+
+        user.setPassword(passwordEncoder.encode(requestDTO.newPassword()));
+        userRepository.save(user);
+        log.info("Password successfully changed for {}", user.getEmail());
     }
 
     /*
