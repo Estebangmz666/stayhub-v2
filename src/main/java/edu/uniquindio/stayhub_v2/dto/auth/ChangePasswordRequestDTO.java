@@ -9,8 +9,8 @@ public record ChangePasswordRequestDTO(
 
         @NotBlank(message = "La nueva contraseña es obligatoria")
         @Pattern(
-                regexp = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=!])(?=\\\\S+$).{8,}$",
-                message = "La contraseña debe tener mínimo 8 caracteres, una letra mayúscula, una letra minúscula, un número y un carácter especial"
+                regexp = "^(?=.*\\d)(?=.*\\p{Ll})(?=.*\\p{Lu})(?=.*[^\\p{L}\\d\\s]).{8,}$",
+                message = "La contraseña debe tener mínimo 8 caracteres, mayúscula, minúscula, número y carácter especial"
         )
         String newPassword
 ) {

@@ -11,6 +11,8 @@ import edu.uniquindio.stayhub_v2.exception.UserNotFoundException;
 import edu.uniquindio.stayhub_v2.mapper.UserMapper;
 import edu.uniquindio.stayhub_v2.model.User;
 import edu.uniquindio.stayhub_v2.repository.UserRepository;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ValidatorFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,16 +20,17 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
-
 import java.time.LocalDateTime;
 import java.util.Optional;
-
+import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 
 @ExtendWith(MockitoExtension.class)
 public class UserServiceTest {
@@ -172,4 +175,43 @@ public class UserServiceTest {
                 .isInstanceOf(InvalidPasswordException.class)
                 .hasMessageContaining("contraseña actual es incorrecta");
     }
+
+    @Test
+    void changePassword_ValidCurrentPassword_UpdatesPassword2() {
+        ChangePasswordRequestDTO request = new ChangePasswordRequestDTO("OldPassword123!", "NuevaContraseña01!");
+
+        when(userRepository.findByEmail(testUser.getEmail())).thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches(request.currentPassword(), testUser.getPassword())).thenReturn(true);
+        when(passwordEncoder.encode(request.newPassword())).thenReturn("new_encoded_password");
+
+        userService.changePassword(testUser.getEmail(), request);
+
+        assertThat(testUser.getPassword()).isEqualTo("new_encoded_password");
+        verify(userRepository).save(testUser);
+    }
+
+    @Test
+    void changePasswordDTO_ValidPasswordWithUnicode_ShouldPassValidation() {
+        ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
+        Validator validator = factory.getValidator();
+
+        ChangePasswordRequestDTO dto = new ChangePasswordRequestDTO("OldPassword123!", "NuevaContraseña01!");
+
+        Set<ConstraintViolation<ChangePasswordRequestDTO>> violations = validator.validate(dto);
+
+        assertThat(violations).isEmpty();
+    }
+
+    @Test
+    void changePasswordDTO_InvalidPassword_ShouldFailValidation() {
+        ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
+        Validator validator = factory.getValidator();
+
+        ChangePasswordRequestDTO dto = new ChangePasswordRequestDTO("OldPassword123!", "password");
+
+        Set<ConstraintViolation<ChangePasswordRequestDTO>> violations = validator.validate(dto);
+
+        assertThat(violations).isNotEmpty();
+    }
+
 }
