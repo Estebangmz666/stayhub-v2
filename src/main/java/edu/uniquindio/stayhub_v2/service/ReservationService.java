@@ -13,12 +13,15 @@ import edu.uniquindio.stayhub_v2.repository.AccommodationRepository;
 import edu.uniquindio.stayhub_v2.repository.ReservationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
 /**
@@ -101,6 +104,15 @@ public class ReservationService {
     private final UserService userService;
     private final ReservationMapper reservationMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
+
+    @Value("${stayhub.payment.bank-account}")
+    private String bankAccountNumber;
+
+    @Value("${stayhub.payment.deposit-percentage:20}")
+    private int depositPercentage;
+
+    @Value("${stayhub.payment.deadline-days:3}")
+    private int deadlineDays;
 
     /**
      * Creates a new reservation (booking) for accommodation.
@@ -243,7 +255,14 @@ public class ReservationService {
         log.debug("Calculated price: {} {} for {} nights",
                 totalPrice, accommodation.getCurrency(), nights);
 
-        // 5. Create and populate reservation entity
+        // 5. Calculate deposit (20%) and payment deadline
+        BigDecimal depositAmount = totalPrice
+                .multiply(BigDecimal.valueOf(depositPercentage))
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        LocalDateTime paymentDeadline = LocalDateTime.now().plusDays(deadlineDays);
+        log.debug("Deposit amount: {} | Payment deadline: {}", depositAmount, paymentDeadline);
+
+        // 6. Create and populate reservation entity
         Reservation reservation = new Reservation();
         reservation.setStartDate(createReservationRequestDTO.startDate());
         reservation.setEndDate(createReservationRequestDTO.endDate());
@@ -252,18 +271,36 @@ public class ReservationService {
         reservation.setTotalPrice(totalPrice);
         reservation.setCurrency(accommodation.getCurrency());
         reservation.setStatus(ReservationStatus.ACTIVE);
+        reservation.setDepositAmount(depositAmount);
+        reservation.setPaymentDeadline(paymentDeadline);
+        reservation.setDepositPaid(false);
 
-        // 6. Persist reservation
+        // 7. Persist reservation
         Reservation saved = reservationRepository.save(reservation);
         log.info("Reservation created successfully with ID: {}", saved.getId());
 
-        // 7. Publish event for async processing (emails, notifications, etc.)
+        // 8. Publish event for async processing (emails, notifications, etc.)
         applicationEventPublisher.publishEvent(new ReservationCreatedEvent(saved));
         log.debug("ReservationCreatedEvent published for reservation ID: {}", saved.getId());
 
-        // 8. Map to DTO and return
-        CreateReservationResponseDTO response = reservationMapper.toDTO(saved);
-        log.debug("Booking response prepared for reservation ID: {}", saved.getId());
+        // 9. Map to base DTO and enrich with payment details
+        CreateReservationResponseDTO base = reservationMapper.toDTO(saved);
+        CreateReservationResponseDTO response = new CreateReservationResponseDTO(
+                base.id(),
+                base.startDate(),
+                base.endDate(),
+                base.totalPrice(),
+                base.currency(),
+                base.status(),
+                base.accommodationId(),
+                base.accommodationTitle(),
+                base.userId(),
+                depositAmount,
+                bankAccountNumber,
+                paymentDeadline
+        );
+        log.debug("Booking response prepared for reservation ID: {} | Deposit: {} | Deadline: {}",
+                saved.getId(), depositAmount, paymentDeadline);
 
         return response;
     }

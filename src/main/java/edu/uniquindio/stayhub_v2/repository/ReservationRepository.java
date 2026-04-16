@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * Repository interface for managing {@link Reservation} entities.
@@ -204,6 +205,52 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             @Param("accommodationId") Long accommodationId,
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate
+    );
+
+    /**
+     * Finds all active reservations of a guest that still have a pending deposit payment.
+     *
+     * <p>Used for in-app notifications: when the guest logs in, the frontend queries
+     * this endpoint to display pending payment alerts.</p>
+     *
+     * @param guestId The ID of the authenticated guest
+     * @param now     Current datetime to filter only non-expired deadlines
+     * @return List of reservations with pending deposit payment
+     */
+    @Query("""
+    SELECT r FROM Reservation r
+    WHERE r.guest.id = :guestId
+    AND r.depositPaid = false
+    AND r.status = 'ACTIVE'
+    AND r.paymentDeadline >= :now
+    ORDER BY r.paymentDeadline ASC
+""")
+    List<Reservation> findPendingDepositsByGuest(
+            @Param("guestId") Long guestId,
+            @Param("now") LocalDateTime now
+    );
+
+    /**
+     * Finds active reservations with a deposit deadline falling within a specific time window.
+     *
+     * <p>Used by the payment reminder scheduler to identify reservations whose
+     * payment deadline is approaching (e.g., within the next 24 hours) so that
+     * reminder emails can be sent to the guests.</p>
+     *
+     * @param from Start of the time window
+     * @param to   End of the time window
+     * @return List of reservations with payment deadline in the window
+     */
+    @Query("""
+    SELECT r FROM Reservation r
+    WHERE r.depositPaid = false
+    AND r.status = 'ACTIVE'
+    AND r.paymentDeadline >= :from
+    AND r.paymentDeadline <= :to
+""")
+    List<Reservation> findReservationsWithPaymentDeadlineApproaching(
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to
     );
 
     /*

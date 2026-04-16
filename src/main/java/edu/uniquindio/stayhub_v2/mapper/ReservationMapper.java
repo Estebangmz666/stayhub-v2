@@ -85,5 +85,8 @@ public interface ReservationMapper {
     @Mapping(target = "accommodationId", source = "accommodation.id")
     @Mapping(target = "accommodationTitle", source = "accommodation.title")
     @Mapping(target = "userId", source = "guest.id")
+    @Mapping(target = "depositAmount", ignore = true)
+    @Mapping(target = "bankAccountNumber", ignore = true)
+    @Mapping(target = "paymentDeadline", ignore = true)
     CreateReservationResponseDTO toDTO(Reservation reservation);
 }

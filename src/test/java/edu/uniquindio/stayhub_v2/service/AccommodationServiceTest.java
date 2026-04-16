@@ -31,102 +31,105 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 public class AccommodationServiceTest {
 
-    @Mock
-    private AccommodationRepository accommodationRepository;
+        @Mock
+        private AccommodationRepository accommodationRepository;
 
-    @Mock
-    private ReservationRepository reservationRepository;
+        @Mock
+        private ReservationRepository reservationRepository;
 
-    @Mock
-    private AccommodationMapper accommodationMapper;
+        @Mock
+        private AccommodationMapper accommodationMapper;
 
-    @InjectMocks
-    private AccommodationService accommodationService;
+        @InjectMocks
+        private AccommodationService accommodationService;
 
-    private Accommodation testAccommodation;
+        private Accommodation testAccommodation;
 
-    @BeforeEach
-    void setUp() {
-        User hostUser = User.builder()
-                .id(1L)
-                .email("host@example.com")
-                .build();
+        @BeforeEach
+        void setUp() {
+                User hostUser = User.builder()
+                                .id(1L)
+                                .email("host@example.com")
+                                .build();
 
-        testAccommodation = Accommodation.builder()
-                .id(100L)
-                .host(hostUser)
-                .deleted(false)
-                .available(true)
-                .build();
-    }
+                testAccommodation = Accommodation.builder()
+                                .id(100L)
+                                .host(hostUser)
+                                .deleted(false)
+                                .available(true)
+                                .build();
+        }
 
-    @Test
-    void deactivateAccommodation_Successful() {
-        when(accommodationRepository.findByIdAndDeletedFalse(100L)).thenReturn(Optional.of(testAccommodation));
-        when(reservationRepository.existsByAccommodationIdAndStartDateAfterAndStatus(
-                eq(100L), any(LocalDateTime.class), eq(ReservationStatus.ACTIVE))).thenReturn(false);
+        @Test
+        void deactivateAccommodation_Successful() {
+                when(accommodationRepository.findByIdAndDeletedFalse(100L)).thenReturn(Optional.of(testAccommodation));
+                when(reservationRepository.existsByAccommodationIdAndStartDateAfterAndStatus(
+                                eq(100L), any(LocalDateTime.class), eq(ReservationStatus.ACTIVE))).thenReturn(false);
 
-        accommodationService.deactivateAccommodation(100L, "host@example.com");
+                accommodationService.deactivateAccommodation(100L, "host@example.com");
 
-        assertThat(testAccommodation.isDeleted()).isTrue();
-        assertThat(testAccommodation.isAvailable()).isFalse();
-        verify(accommodationRepository).save(testAccommodation);
-    }
+                assertThat(testAccommodation.isDeleted()).isTrue();
+                assertThat(testAccommodation.isAvailable()).isFalse();
+                verify(accommodationRepository).save(testAccommodation);
+        }
 
-    @Test
-    void deactivateAccommodation_UnauthorizedHost_ThrowsException() {
-        when(accommodationRepository.findByIdAndDeletedFalse(100L)).thenReturn(Optional.of(testAccommodation));
+        @Test
+        void deactivateAccommodation_UnauthorizedHost_ThrowsException() {
+                when(accommodationRepository.findByIdAndDeletedFalse(100L)).thenReturn(Optional.of(testAccommodation));
 
-        assertThatThrownBy(() -> accommodationService.deactivateAccommodation(100L, "otheruser@example.com"))
-                .isInstanceOf(UnauthorizedHostException.class)
-                .hasMessageContaining("No tienes permisos para dar de baja esta casa rural.");
+                assertThatThrownBy(() -> accommodationService.deactivateAccommodation(100L, "otheruser@example.com"))
+                                .isInstanceOf(UnauthorizedHostException.class)
+                                .hasMessageContaining("No tienes permisos para dar de baja esta casa rural.");
 
-        assertThat(testAccommodation.isDeleted()).isFalse();
-        verify(reservationRepository, never()).existsByAccommodationIdAndStartDateAfterAndStatus(any(), any(), any());
-        verify(accommodationRepository, never()).save(any());
-    }
+                assertThat(testAccommodation.isDeleted()).isFalse();
+                verify(reservationRepository, never()).existsByAccommodationIdAndStartDateAfterAndStatus(any(), any(),
+                                any());
+                verify(accommodationRepository, never()).save(any());
+        }
 
-    @Test
-    void deactivateAccommodation_ActiveReservationsExist_ThrowsException() {
-        when(accommodationRepository.findByIdAndDeletedFalse(100L)).thenReturn(Optional.of(testAccommodation));
-        when(reservationRepository.existsByAccommodationIdAndStartDateAfterAndStatus(
-                eq(100L), any(LocalDateTime.class), eq(ReservationStatus.ACTIVE))).thenReturn(true);
+        @Test
+        void deactivateAccommodation_ActiveReservationsExist_ThrowsException() {
+                when(accommodationRepository.findByIdAndDeletedFalse(100L)).thenReturn(Optional.of(testAccommodation));
+                when(reservationRepository.existsByAccommodationIdAndStartDateAfterAndStatus(
+                                eq(100L), any(LocalDateTime.class), eq(ReservationStatus.ACTIVE))).thenReturn(true);
 
-        assertThatThrownBy(() -> accommodationService.deactivateAccommodation(100L, "host@example.com"))
-                .isInstanceOf(ActiveReservationsException.class)
-                .hasMessageContaining("reservas futuras");
+                assertThatThrownBy(() -> accommodationService.deactivateAccommodation(100L, "host@example.com"))
+                                .isInstanceOf(ActiveReservationsException.class)
+                                .hasMessageContaining("reservas futuras");
 
-        assertThat(testAccommodation.isDeleted()).isFalse();
-        verify(accommodationRepository, never()).save(any());
-    }
+                assertThat(testAccommodation.isDeleted()).isFalse();
+                verify(accommodationRepository, never()).save(any());
+        }
 
-    @Test
-    void deactivateAccommodation_NotFound_ThrowsException() {
-        when(accommodationRepository.findByIdAndDeletedFalse(999L)).thenReturn(Optional.empty());
+        @Test
+        void deactivateAccommodation_NotFound_ThrowsException() {
+                when(accommodationRepository.findByIdAndDeletedFalse(999L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> accommodationService.deactivateAccommodation(999L, "host@example.com"))
-                .isInstanceOf(AccommodationNotFoundException.class);
-    }
+                assertThatThrownBy(() -> accommodationService.deactivateAccommodation(999L, "host@example.com"))
+                                .isInstanceOf(AccommodationNotFoundException.class);
+        }
 
-    @Test
-    void getAccommodation_Successful() {
-        AccommodationGetByIdResponseDTO mockResponse = new AccommodationGetByIdResponseDTO(
-                null, "Title", "Desc", 4, new java.math.BigDecimal("100"), "main.jpg", "loc", "city", java.util.List.of(), true);
-        when(accommodationRepository.findByIdAndDeletedFalse(100L)).thenReturn(Optional.of(testAccommodation));
-        when(accommodationMapper.toAccommodationGetByIdResponseDTO(testAccommodation)).thenReturn(mockResponse);
+        @Test
+        void getAccommodation_Successful() {
+                AccommodationGetByIdResponseDTO mockResponse = new AccommodationGetByIdResponseDTO(
+                                null, "Title", "Desc", 4, new java.math.BigDecimal("100"), "main.jpg", "loc", "city",
+                                java.util.List.of(), true);
+                when(accommodationRepository.findByIdAndDeletedFalse(100L)).thenReturn(Optional.of(testAccommodation));
+                when(accommodationMapper.toAccommodationGetByIdResponseDTO(testAccommodation)).thenReturn(mockResponse);
 
-        AccommodationGetByIdResponseDTO response = accommodationService.getAccommodation(100L);
+                AccommodationGetByIdResponseDTO response = accommodationService.getAccommodation(100L);
 
-        assertThat(response).isNotNull();
-        assertThat(response.title()).isEqualTo("Title");
-    }
+                assertThat(response).isNotNull();
+                assertThat(response.title()).isEqualTo("Title");
+        }
 
-    @Test
-    void getAccommodation_NotFound_ThrowsException() {
-        when(accommodationRepository.findByIdAndDeletedFalse(999L)).thenReturn(Optional.empty());
+        @Test
+        void getAccommodation_NotFound_ThrowsException() {
+                when(accommodationRepository.findByIdAndDeletedFalse(999L))
+                                .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> accommodationService.getAccommodation(999L))
-                .isInstanceOf(AccommodationNotFoundException.class)
-                .hasMessageContaining("No se encontró ninguna casa con ese código");
-    }
+                assertThatThrownBy(() -> accommodationService.getAccommodation(999L))
+                                .isInstanceOf(AccommodationNotFoundException.class)
+                                .hasMessageContaining("Accommodation not found with id");
+        }
 }

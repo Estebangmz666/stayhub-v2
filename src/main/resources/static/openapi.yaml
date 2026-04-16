@@ -218,6 +218,133 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  # ─────────────────────────────────────────────
+  # BOOKINGS — updated with payment fields (v1.1)
+  # ─────────────────────────────────────────────
+  /api/v2/bookings/book:
+    post:
+      tags:
+        - Bookings
+      summary: Create a new accommodation reservation
+      description: |
+        Creates a new reservation for an accommodation.
+
+        **Payment notice (v1.1):** Upon successful creation the response includes:
+        - `depositAmount`: the 20% advance deposit the guest must pay.
+        - `bankAccountNumber`: the account where the transfer should be made.
+        - `paymentDeadline`: 3 days from booking. The guest must pay before this date.
+
+        The frontend should display a modal with these details immediately after booking.
+      operationId: bookAccommodation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReservationRequest'
+            example:
+              accommodationId: 1
+              startDate: "2025-06-01T15:00:00"
+              endDate: "2025-06-05T11:00:00"
+      responses:
+        '201':
+          description: |
+            Reservation successfully created.
+            The response includes payment details for the mandatory 20% advance deposit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateReservationResponse'
+              example:
+                id: 12345
+                startDate: "2025-06-01T15:00:00"
+                endDate: "2025-06-05T11:00:00"
+                totalPrice: 1000.00
+                currency: "COP"
+                status: "ACTIVE"
+                accommodationId: 1
+                accommodationTitle: "Cabaña en el Quindío"
+                userId: 678
+                depositAmount: 200.00
+                bankAccountNumber: "3001234567890"
+                paymentDeadline: "2025-04-18T09:00:00"
+        '400':
+          description: Invalid request — validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized — valid JWT token required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Accommodation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflict — accommodation not available for selected dates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ─────────────────────────────────────────────
+  # NOTIFICATIONS — new endpoint (v1.1)
+  # ─────────────────────────────────────────────
+  /api/v2/notifications/payment-pending:
+    get:
+      tags:
+        - Notifications
+      summary: Get pending payment notifications
+      description: |
+        Returns all active reservations for the **authenticated guest** that have a pending
+        deposit payment (`depositPaid = false`) and a deadline that has not expired yet.
+
+        **Usage (frontend):** Call this endpoint after login or when the user navigates to
+        their reservations page. If the list is non-empty, display a payment reminder modal
+        for each pending payment.
+
+        Returns an **empty array** when there are no pending payments.
+      operationId: getPendingPaymentNotifications
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of pending payment notifications (may be empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PaymentNotification'
+              example:
+                - reservationId: 12345
+                  accommodationTitle: "Cabaña en el Quindío"
+                  depositAmount: 200.00
+                  currency: "COP"
+                  bankAccountNumber: "3001234567890"
+                  paymentDeadline: "2025-04-18T09:00:00"
+        '401':
+          description: Unauthorized — valid JWT token required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -435,3 +562,150 @@ components:
       required:
         - currentPassword
         - newPassword
+
+    # ─────────────────────────────────────
+    # NEW schemas — v1.1 (Payment notice)
+    # ─────────────────────────────────────
+    CreateReservationRequest:
+      type: object
+      description: Request body for creating a new reservation.
+      properties:
+        accommodationId:
+          type: integer
+          format: int64
+          description: ID of the accommodation to reserve
+          example: 1
+        startDate:
+          type: string
+          format: date-time
+          description: Check-in date and time (must be in the future)
+          example: "2025-06-01T15:00:00"
+        endDate:
+          type: string
+          format: date-time
+          description: Check-out date and time (must be after startDate)
+          example: "2025-06-05T11:00:00"
+      required:
+        - accommodationId
+        - startDate
+        - endDate
+
+    CreateReservationResponse:
+      type: object
+      description: |
+        Response returned after a reservation is created.
+        Includes payment details for the mandatory 20% advance deposit.
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Unique identifier of the reservation
+          example: 12345
+        startDate:
+          type: string
+          format: date-time
+          description: Check-in date and time
+          example: "2025-06-01T15:00:00"
+        endDate:
+          type: string
+          format: date-time
+          description: Check-out date and time
+          example: "2025-06-05T11:00:00"
+        totalPrice:
+          type: number
+          format: double
+          description: Total price for the reservation
+          example: 1000.00
+        currency:
+          type: string
+          description: Currency code (ISO 4217)
+          example: "COP"
+        status:
+          type: string
+          enum: [ACTIVE, COMPLETED, CANCELLED, NO_SHOW]
+          description: Current status of the reservation
+          example: "ACTIVE"
+        accommodationId:
+          type: integer
+          format: int64
+          description: ID of the booked accommodation
+          example: 1
+        accommodationTitle:
+          type: string
+          description: Name of the booked accommodation
+          example: "Cabaña en el Quindío"
+        userId:
+          type: integer
+          format: int64
+          description: ID of the guest who made the reservation
+          example: 678
+        depositAmount:
+          type: number
+          format: double
+          description: |
+            Required advance deposit — 20% of `totalPrice`.
+            The guest must transfer this amount to `bankAccountNumber` before `paymentDeadline`.
+          example: 200.00
+        bankAccountNumber:
+          type: string
+          description: Bank account number where the deposit transfer must be made
+          example: "3001234567890"
+        paymentDeadline:
+          type: string
+          format: date-time
+          description: |
+            Deadline to complete the deposit payment.
+            Calculated as 3 days from the moment the reservation is created.
+          example: "2025-04-18T09:00:00"
+      required:
+        - id
+        - startDate
+        - endDate
+        - totalPrice
+        - currency
+        - status
+        - accommodationId
+        - accommodationTitle
+        - userId
+        - depositAmount
+        - bankAccountNumber
+        - paymentDeadline
+
+    PaymentNotification:
+      type: object
+      description: In-app notification for a pending advance deposit payment.
+      properties:
+        reservationId:
+          type: integer
+          format: int64
+          description: Unique identifier of the reservation
+          example: 12345
+        accommodationTitle:
+          type: string
+          description: Name of the booked accommodation
+          example: "Cabaña en el Quindío"
+        depositAmount:
+          type: number
+          format: double
+          description: Pending deposit amount (20% of total price)
+          example: 200.00
+        currency:
+          type: string
+          description: Currency code (ISO 4217)
+          example: "COP"
+        bankAccountNumber:
+          type: string
+          description: Bank account number for the transfer
+          example: "3001234567890"
+        paymentDeadline:
+          type: string
+          format: date-time
+          description: Deadline to complete the payment
+          example: "2025-04-18T09:00:00"
+      required:
+        - reservationId
+        - accommodationTitle
+        - depositAmount
+        - currency
+        - bankAccountNumber
+        - paymentDeadline
