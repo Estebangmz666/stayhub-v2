@@ -2,19 +2,24 @@ package edu.uniquindio.stayhub_v2.service;
 
 import edu.uniquindio.stayhub_v2.dto.reservation.CreateReservationRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.CreateReservationResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryResponseDTO;
 import edu.uniquindio.stayhub_v2.event.ReservationCreatedEvent;
 import edu.uniquindio.stayhub_v2.exception.AccommodationNotFoundException;
+import edu.uniquindio.stayhub_v2.exception.ReservationNotFoundException;
 import edu.uniquindio.stayhub_v2.mapper.ReservationMapper;
-import edu.uniquindio.stayhub_v2.model.Accommodation;
-import edu.uniquindio.stayhub_v2.model.Reservation;
-import edu.uniquindio.stayhub_v2.model.ReservationStatus;
-import edu.uniquindio.stayhub_v2.model.User;
+import edu.uniquindio.stayhub_v2.model.*;
 import edu.uniquindio.stayhub_v2.repository.AccommodationRepository;
 import edu.uniquindio.stayhub_v2.repository.ReservationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -233,7 +238,7 @@ public class ReservationService {
                     "Accommodation is already booked for the selected dates");
         }
 
-        // 3. Get current authenticated user (guest)
+        // 3. Get a current authenticated user (guest)
         User user = userService.getCurrentUser();
         log.debug("Guest user: {} (ID: {})", user.getEmail(), user.getId());
 
@@ -428,4 +433,99 @@ public class ReservationService {
      *     return reservationMapper.toDTO(updated);
      * }
      */
+
+    /**
+     * Retrieves the full detail of a single reservation by its ID.
+     * Both HOST and GUEST can call this endpoint.
+     * The service validates that the authenticated user is either
+     * the guest of the reservation OR the host of the accommodation,
+     * to prevent unauthorized access to other users' reservations.
+     */
+    @Transactional(readOnly = true)
+    public RetrieveReservationResponseDTO getReservationById(Long reservationId) {
+
+        log.info("Retrieving reservation with ID: {}", reservationId);
+
+        // 1. Get the authenticated user from the security context
+        User currentUser = userService.getCurrentUser();
+        log.debug("Authenticated user: {} (ID: {})", currentUser.getEmail(), currentUser.getId());
+
+        // 2. Find the reservation or throw 404
+        Reservation reservation = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> {
+                    log.warn("Reservation not found with ID: {}", reservationId);
+                    return new ReservationNotFoundException(
+                            "Reservation with ID " + reservationId + " not found"
+                    );
+                });
+
+        // 3. Validate access: only the guest OR the host of the accommodation can see this
+        boolean isGuest = reservation.getGuest().getId().equals(currentUser.getId());
+        boolean isHost = reservation.getAccommodation().getHost().getId().equals(currentUser.getId());
+
+        if (!isGuest && !isHost) {
+            log.warn("Unauthorized access attempt: user {} tried to access reservation {}",
+                    currentUser.getEmail(), reservationId);
+            throw new AccessDeniedException(
+                    "You do not have permission to view this reservation"
+            );
+        }
+
+        log.info("Reservation {} retrieved successfully by user {} (role: {})",
+                reservationId,
+                currentUser.getEmail(),
+                isHost ? "HOST" : "GUEST"
+        );
+
+        // 4. Map to the full detail DTO and return
+        return reservationMapper.toRetrieveDTO(reservation);
+    }
+
+    /**
+     * Retrieves a paginated list of reservations for the authenticated user.
+     * If the user has the HOST role, returns reservations for all their accommodations.
+     * If the user has the GUEST role, returns their own reservations as a guest.
+     * Page size is fixed at 10 results per page.
+     */
+    @Transactional(readOnly = true)
+    public Page<RetrieveReservationSummaryResponseDTO> getMyReservations(int page) {
+
+        log.info("Retrieving reservations page {} for authenticated user", page);
+
+        // 1. Get the authenticated user from the security context
+        User currentUser = userService.getCurrentUser();
+        log.debug("Authenticated user: {} (ID: {})", currentUser.getEmail(), currentUser.getId());
+
+        // 2. Build pageable with fixed page size of 10, ordered by startDate descending
+        Pageable pageable = PageRequest.of(page, 10, Sort.by(Sort.Direction.DESC, "startDate"));
+
+        // 3. Check if the user has the HOST role
+        boolean isHost = currentUser.getRoles().contains(Role.HOST);
+
+        Page<Reservation> reservations;
+
+        if (isHost) {
+            // HOST: returns all reservations for accommodations they own
+            log.debug("User {} is HOST, fetching reservations for their accommodations",
+                    currentUser.getEmail());
+            reservations = reservationRepository
+                    .findByAccommodationHostId(currentUser.getId(), pageable);
+        } else {
+            // GUEST: returns only their own reservations
+            log.debug("User {} is GUEST, fetching their personal reservations",
+                    currentUser.getEmail());
+            reservations = reservationRepository
+                    .findByGuestId(currentUser.getId(), pageable);
+        }
+
+        log.info("Found {} reservations (page {}/{}) for user {}",
+                reservations.getNumberOfElements(),
+                page,
+                reservations.getTotalPages(),
+                currentUser.getEmail()
+        );
+
+        // 4. Map each Reservation entity to the summary DTO and return the page
+        return reservations.map(reservationMapper::toSummaryDTO);
+    }
 }

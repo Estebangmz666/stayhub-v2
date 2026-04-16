@@ -25,7 +25,6 @@ import java.time.LocalDateTime;
  * <ul>
  *   <li>Automatic {@code createdAt} population on entity persistence</li>
  *   <li>Automatic {@code updatedAt} refresh on entity updates</li>
- *   <li>Manual touch capability via {@link #touch()} method</li>
  *   <li>Integration with Spring Security for {@code @CreatedBy} and {@code @LastModifiedBy}
  *       (can be added by extending classes)</li>
  * </ul>
@@ -42,7 +41,7 @@ import java.time.LocalDateTime;
  * }</pre>
  *
  * <p><b>Configuration Required:</b></p>
- * Don't forget to enable JPA auditing in your Spring configuration:
+ * Remember to enable JPA auditing in your Spring configuration:
  * <pre>{@code
  * @Configuration
  * @EnableJpaAuditing
@@ -116,7 +115,7 @@ public abstract class Auditable {
      * <p><b>Update Triggers:</b></p>
      * <ul>
      *   <li>Explicit entity modifications via setters</li>
-     *   <li>JPA dirty checking during flush</li>
+     *   <li>JPA dirty checking during a flush</li>
      *   <li>Manual invocation of {@link #touch()}</li>
      * </ul>
      *
@@ -128,43 +127,10 @@ public abstract class Auditable {
      *   <li>Finding stale or abandoned records</li>
      * </ul>
      *
-     * <p><b>Initial Value:</b> On first creation, this field is set to the same
+     * <p><b>Initial Value:</b> On the first creation, this field is set to the same
      * value as {@code createdAt}.</p>
      */
     @LastModifiedDate
     @Column(nullable = false)
     private LocalDateTime updatedAt;
-
-    /**
-     * Manually updates the object's modification date to the current time.
-     *
-     * <p>This method forces an update to the {@code updatedAt} field independent
-     * of other field modifications. Useful when business logic requires marking
-     * an entity as "touched" without changing any other attributes.</p>
-     *
-     * <p><b>Use Cases:</b></p>
-     * <ul>
-     *   <li>Refreshing cache TTL (Time To Live)</li>
-     *   <li>Marking a record as "active" without other changes</li>
-     *   <li>Extending soft-delete grace periods</li>
-     *   <li>Triggering downstream processes that monitor {@code updatedAt}</li>
-     * </ul>
-     *
-     * <p><b>Note:</b> This method is {@code private}. If you need to invoke it
-     * from outside the entity hierarchy, consider changing visibility to
-     * {@code public} or {@code protected}.</p>
-     *
-     * <p><b>Example:</b></p>
-     * <pre>{@code
-     * // Inside an entity service
-     * public void markAsActive(MyEntity entity) {
-     *     // Perform some logic
-     *     entity.touch();  // Update timestamp without changing fields
-     *     repository.save(entity);
-     * }
-     * }</pre>
-     */
-    private void touch() {
-        this.updatedAt = LocalDateTime.now();
-    }
 }

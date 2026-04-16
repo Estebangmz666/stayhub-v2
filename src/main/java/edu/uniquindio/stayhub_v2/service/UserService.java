@@ -20,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -146,9 +147,7 @@ public class UserService {
      * @throws IllegalStateException if no user is authenticated or principal is anonymous
      */
     public User getCurrentUser() {
-        Authentication authentication = SecurityContextHolder
-                .getContext()
-                .getAuthentication();
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         if (authentication == null
                 || !authentication.isAuthenticated()
@@ -157,10 +156,19 @@ public class UserService {
             throw new IllegalStateException("User not authenticated");
         }
 
-        User user = (User) authentication.getPrincipal();
-        assert user != null;
-        log.debug("Retrieved current user: {}", user.getEmail());
-        return user;
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof org.springframework.security.core.userdetails.UserDetails userDetails) {
+            String email = userDetails.getUsername();
+
+            return userRepository.findByEmail(email)
+                    .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado con email: " + email));
+        }
+        if (principal instanceof User user) {
+            return user;
+        }
+
+        assert principal != null;
+        throw new IllegalStateException("Tipo de principal no soportado: " + principal.getClass().getName());
     }
 
     /**

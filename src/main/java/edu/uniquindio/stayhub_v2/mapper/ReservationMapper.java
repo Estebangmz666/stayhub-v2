@@ -1,6 +1,8 @@
 package edu.uniquindio.stayhub_v2.mapper;
 
 import edu.uniquindio.stayhub_v2.dto.reservation.CreateReservationResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryResponseDTO;
 import edu.uniquindio.stayhub_v2.model.Reservation;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -89,4 +91,17 @@ public interface ReservationMapper {
     @Mapping(target = "bankAccountNumber", ignore = true)
     @Mapping(target = "paymentDeadline", ignore = true)
     CreateReservationResponseDTO toDTO(Reservation reservation);
+
+    @Mapping(target = "accommodationId", source = "accommodation.id")
+    @Mapping(target = "accommodationTitle", source = "accommodation.title")
+    @Mapping(target = "accommodationCity", source = "accommodation.city")
+    @Mapping(target = "guestId", source = "guest.id")
+    @Mapping(target = "guestEmail", source = "guest.email")
+    @Mapping(target = "currencyCode", source = "currency.currencyCode")
+    RetrieveReservationResponseDTO toRetrieveDTO(Reservation reservation);
+
+    @Mapping(target = "accommodationId", source = "accommodation.id")
+    @Mapping(target = "accommodationTitle", source = "accommodation.title")
+    @Mapping(target = "currencyCode", source = "currency.currencyCode")
+    RetrieveReservationSummaryResponseDTO toSummaryDTO(Reservation reservation);
 }

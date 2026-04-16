@@ -2,6 +2,8 @@ package edu.uniquindio.stayhub_v2.controller;
 
 import edu.uniquindio.stayhub_v2.dto.reservation.CreateReservationRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.CreateReservationResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryResponseDTO;
 import edu.uniquindio.stayhub_v2.service.ReservationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -13,12 +15,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Booking management", description = "Endpoints for managing bookings")
 @RestController
@@ -142,5 +142,44 @@ public class BookingController {
         CreateReservationResponseDTO createReservationResponseDTO = reservationService.createReservation(createReservationRequestDTO);
         log.debug("Booking created successfully for accommodation ID: {}", createReservationRequestDTO.accommodationId());
         return ResponseEntity.status(HttpStatus.CREATED).body(createReservationResponseDTO);
+    }
+
+    @Operation(
+            summary = "Get reservation detail by ID",
+            description = "Returns the full detail of a reservation. " +
+                    "Only the guest who made the reservation or the host of the accommodation can access it."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Reservation found and returned successfully"),
+            @ApiResponse(responseCode = "403", description = "Access denied - user is neither the guest nor the host"),
+            @ApiResponse(responseCode = "404", description = "Reservation not found")
+    })
+    @GetMapping("/{reservationId}")
+    public ResponseEntity<RetrieveReservationResponseDTO> getReservationById(
+            @PathVariable Long reservationId) {
+
+        log.info("GET /bookings/{} - retrieving reservation detail", reservationId);
+        RetrieveReservationResponseDTO response = reservationService.getReservationById(reservationId);
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(
+            summary = "Get paginated list of my reservations",
+            description = "Returns a paginated list of reservations for the authenticated user. " +
+                    "If the user is a HOST, returns reservations for all their accommodations. " +
+                    "If the user is a GUEST, returns their own reservations. " +
+                    "Results are sorted by start date descending, 10 per page."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Reservations retrieved successfully"),
+            @ApiResponse(responseCode = "401", description = "User not authenticated")
+    })
+    @GetMapping("/my-reservations")
+    public ResponseEntity<Page<RetrieveReservationSummaryResponseDTO>> getMyReservations(
+            @RequestParam(defaultValue = "0") int page) {
+
+        log.info("GET /bookings/my-reservations?page={} - retrieving reservations list", page);
+        Page<RetrieveReservationSummaryResponseDTO> response = reservationService.getMyReservations(page);
+        return ResponseEntity.ok(response);
     }
 }
