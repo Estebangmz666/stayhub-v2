@@ -1,7 +1,13 @@
 package edu.uniquindio.stayhub_v2.repository;
 
 import edu.uniquindio.stayhub_v2.model.Accommodation;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
@@ -104,6 +110,19 @@ public interface AccommodationRepository extends JpaRepository<Accommodation, Lo
      *         and is not deleted, otherwise an empty {@code Optional}
      */
     Optional<Accommodation> findByIdAndDeletedFalse(Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+    SELECT a FROM Accommodation a
+    WHERE a.id = :id
+    AND a.deleted = false
+    AND a.available = true
+""")
+    Optional<Accommodation> findAvailableByIdWithWriteLock(@Param("id") Long id);
+
+    Page<Accommodation> findByCityContainingIgnoreCaseAndDeletedFalseAndAvailableTrue(
+            String city,
+            Pageable pageable);
 
     /*
      * Additional query methods that could be added in the future:

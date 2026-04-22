@@ -1,6 +1,7 @@
 package edu.uniquindio.stayhub_v2.service;
 
 import edu.uniquindio.stayhub_v2.dto.accommodation.AccommodationGetByIdResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.accommodation.AccommodationSearchByCityResponseDTO;
 import edu.uniquindio.stayhub_v2.exception.AccommodationNotFoundException;
 import edu.uniquindio.stayhub_v2.mapper.AccommodationMapper;
 import edu.uniquindio.stayhub_v2.model.Accommodation;
@@ -11,6 +12,10 @@ import edu.uniquindio.stayhub_v2.exception.ActiveReservationsException;
 import edu.uniquindio.stayhub_v2.exception.UnauthorizedHostException;
 import edu.uniquindio.stayhub_v2.model.ReservationStatus;
 import edu.uniquindio.stayhub_v2.repository.ReservationRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -136,6 +141,48 @@ public class AccommodationService {
                 accommodation.getTitle(), id);
 
         return accommodationMapper.toAccommodationGetByIdResponseDTO(accommodation);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<AccommodationSearchByCityResponseDTO> searchAccommodationsByCity(
+            String city,
+            int page,
+            int size) {
+
+        String normalizedCity = city == null ? "" : city.trim();
+        if (normalizedCity.isBlank()) {
+            throw new IllegalArgumentException("City is required");
+        }
+        if (page < 0) {
+            throw new IllegalArgumentException("Page must be zero or greater");
+        }
+        if (size < 1 || size > 50) {
+            throw new IllegalArgumentException("Size must be between 1 and 50");
+        }
+
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Direction.ASC, "title")
+        );
+
+        log.info("Searching available accommodations by city '{}' page {} size {}",
+                normalizedCity, page, size);
+
+        return accommodationRepository
+                .findByCityContainingIgnoreCaseAndDeletedFalseAndAvailableTrue(
+                        normalizedCity,
+                        pageable
+                )
+                .map(accommodation -> new AccommodationSearchByCityResponseDTO(
+                        accommodation.getId(),
+                        accommodation.getTitle(),
+                        accommodation.getCity(),
+                        accommodation.getCapacity(),
+                        accommodation.getPricePerNight(),
+                        accommodation.getCurrency().getCurrencyCode(),
+                        accommodation.getMainImage()
+                ));
     }
 
     /**

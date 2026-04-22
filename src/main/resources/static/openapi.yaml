@@ -63,6 +63,77 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/v2/accommodations:
+    get:
+      tags:
+        - Accommodations
+      summary: Search accommodations by city
+      operationId: searchAccommodationsByCity
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: city
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            example: Armenia
+          description: City name to search. Examples include Armenia, Medellin and Bogota.
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Zero-based page number
+        - in: query
+          name: size
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+          description: Page size
+      responses:
+        '200':
+          description: Accommodations retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AccommodationSearchByCityResponse'
+                  pageable:
+                    type: object
+                  totalElements:
+                    type: integer
+                    format: int64
+                  totalPages:
+                    type: integer
+                  size:
+                    type: integer
+                  number:
+                    type: integer
+                  numberOfElements:
+                    type: integer
+                  first:
+                    type: boolean
+                  last:
+                    type: boolean
+                  empty:
+                    type: boolean
+        '400':
+          description: Invalid city, page or size parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/v2/accommodations/{id}:
     get:
       tags:
@@ -594,6 +665,41 @@ components:
         - city
         - images
         - available
+    AccommodationSearchByCityResponse:
+      type: object
+      description: Basic accommodation data returned by city search.
+      properties:
+        accommodationCode:
+          type: integer
+          format: int64
+          example: 1
+        title:
+          type: string
+          example: Cabana familiar en Armenia
+        city:
+          type: string
+          example: Armenia
+        capacity:
+          type: integer
+          example: 5
+        pricePerNight:
+          type: number
+          format: double
+          example: 180000.00
+        currency:
+          type: string
+          example: COP
+        mainImage:
+          type: string
+          format: uri
+          example: https://images.example.com/accommodations/main/cabana-armenia.jpg
+      required:
+        - accommodationCode
+        - title
+        - city
+        - capacity
+        - pricePerNight
+        - currency
     User:
       type: object
       properties:

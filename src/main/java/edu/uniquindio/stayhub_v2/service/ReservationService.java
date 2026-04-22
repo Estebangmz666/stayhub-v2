@@ -213,13 +213,13 @@ public class ReservationService {
                 createReservationRequestDTO.startDate(),
                 createReservationRequestDTO.endDate());
 
-        // 1. Retrieve and validate accommodation
+        // 1. Retrieve and lock the accommodation to serialize competing reservations.
         Accommodation accommodation = accommodationRepository
-                .findById(createReservationRequestDTO.accommodationId())
+                .findAvailableByIdWithWriteLock(createReservationRequestDTO.accommodationId())
                 .orElseThrow(() -> {
-                    log.warn("Booking failed: Accommodation not found with ID: {}",
+                    log.warn("Booking failed: Accommodation not found or unavailable with ID: {}",
                             createReservationRequestDTO.accommodationId());
-                    return new AccommodationNotFoundException("Accommodation not found");
+                    return new AccommodationNotFoundException("Accommodation not found or unavailable");
                 });
 
         // 2. Check availability (no overlapping active reservations)

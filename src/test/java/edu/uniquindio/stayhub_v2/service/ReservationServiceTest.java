@@ -172,7 +172,7 @@ class ReservationServiceTest {
         LocalDateTime end = LocalDateTime.now().plusDays(13);
         CreateReservationRequestDTO request = new CreateReservationRequestDTO(10L, start, end);
 
-        when(accommodationRepository.findById(10L)).thenReturn(Optional.of(accommodation));
+        when(accommodationRepository.findAvailableByIdWithWriteLock(10L)).thenReturn(Optional.of(accommodation));
         when(reservationRepository.existsByAccommodationIdAndDateRange(any(), any(), any())).thenReturn(false);
         when(userService.getCurrentUser()).thenReturn(guest);
         when(reservationRepository.save(any(Reservation.class))).thenReturn(savedReservation);
@@ -195,7 +195,7 @@ class ReservationServiceTest {
         LocalDateTime end = LocalDateTime.now().plusDays(13);
         CreateReservationRequestDTO request = new CreateReservationRequestDTO(10L, start, end);
 
-        when(accommodationRepository.findById(10L)).thenReturn(Optional.of(accommodation));
+        when(accommodationRepository.findAvailableByIdWithWriteLock(10L)).thenReturn(Optional.of(accommodation));
         when(reservationRepository.existsByAccommodationIdAndDateRange(any(), any(), any())).thenReturn(false);
         when(userService.getCurrentUser()).thenReturn(guest);
         when(reservationRepository.save(any(Reservation.class))).thenReturn(savedReservation);
@@ -219,7 +219,7 @@ class ReservationServiceTest {
         LocalDateTime end = LocalDateTime.now().plusDays(13);
         CreateReservationRequestDTO request = new CreateReservationRequestDTO(10L, start, end);
 
-        when(accommodationRepository.findById(10L)).thenReturn(Optional.of(accommodation));
+        when(accommodationRepository.findAvailableByIdWithWriteLock(10L)).thenReturn(Optional.of(accommodation));
         when(reservationRepository.existsByAccommodationIdAndDateRange(any(), any(), any())).thenReturn(false);
         when(userService.getCurrentUser()).thenReturn(guest);
         when(reservationRepository.save(any(Reservation.class))).thenReturn(savedReservation);
@@ -236,7 +236,7 @@ class ReservationServiceTest {
         LocalDateTime end = LocalDateTime.now().plusDays(13);
         CreateReservationRequestDTO request = new CreateReservationRequestDTO(10L, start, end);
 
-        when(accommodationRepository.findById(10L)).thenReturn(Optional.of(accommodation));
+        when(accommodationRepository.findAvailableByIdWithWriteLock(10L)).thenReturn(Optional.of(accommodation));
         when(reservationRepository.existsByAccommodationIdAndDateRange(any(), any(), any())).thenReturn(false);
         when(userService.getCurrentUser()).thenReturn(guest);
         when(reservationRepository.save(any(Reservation.class))).thenReturn(savedReservation);
@@ -260,7 +260,7 @@ class ReservationServiceTest {
         LocalDateTime end = LocalDateTime.now().plusDays(13);
         CreateReservationRequestDTO request = new CreateReservationRequestDTO(999L, start, end);
 
-        when(accommodationRepository.findById(999L)).thenReturn(Optional.empty());
+        when(accommodationRepository.findAvailableByIdWithWriteLock(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> reservationService.createReservation(request))
                 .isInstanceOf(AccommodationNotFoundException.class);
@@ -274,7 +274,7 @@ class ReservationServiceTest {
         LocalDateTime end = LocalDateTime.now().plusDays(13);
         CreateReservationRequestDTO request = new CreateReservationRequestDTO(10L, start, end);
 
-        when(accommodationRepository.findById(10L)).thenReturn(Optional.of(accommodation));
+        when(accommodationRepository.findAvailableByIdWithWriteLock(10L)).thenReturn(Optional.of(accommodation));
         when(reservationRepository.existsByAccommodationIdAndDateRange(any(), any(), any())).thenReturn(true);
 
         assertThatThrownBy(() -> reservationService.createReservation(request))

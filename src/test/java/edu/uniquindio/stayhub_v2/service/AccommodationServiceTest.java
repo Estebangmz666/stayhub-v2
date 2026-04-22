@@ -16,8 +16,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Currency;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -131,5 +137,57 @@ public class AccommodationServiceTest {
                 assertThatThrownBy(() -> accommodationService.getAccommodation(999L))
                                 .isInstanceOf(AccommodationNotFoundException.class)
                                 .hasMessageContaining("Accommodation not found with id");
+        }
+
+        @Test
+        void searchAccommodationsByCity_ValidCity_ReturnsBasicAccommodationData() {
+                testAccommodation.setTitle("Cabana en Armenia");
+                testAccommodation.setCity("Armenia");
+                testAccommodation.setCapacity(4);
+                testAccommodation.setPricePerNight(new BigDecimal("180000.00"));
+                testAccommodation.setCurrency(Currency.getInstance("COP"));
+                testAccommodation.setMainImage("https://images.example.com/cabana.jpg");
+
+                when(accommodationRepository.findByCityContainingIgnoreCaseAndDeletedFalseAndAvailableTrue(
+                                eq("Armenia"),
+                                any(Pageable.class)))
+                                .thenReturn(new PageImpl<>(List.of(testAccommodation)));
+
+                Page<?> response = accommodationService.searchAccommodationsByCity(" Armenia ", 0, 10);
+
+                assertThat(response.getContent()).hasSize(1);
+                Object firstResult = response.getContent().getFirst();
+                assertThat(firstResult)
+                                .hasFieldOrPropertyWithValue("accommodationCode", 100L)
+                                .hasFieldOrPropertyWithValue("title", "Cabana en Armenia")
+                                .hasFieldOrPropertyWithValue("city", "Armenia")
+                                .hasFieldOrPropertyWithValue("capacity", 4)
+                                .hasFieldOrPropertyWithValue("currency", "COP");
+
+                verify(accommodationRepository)
+                                .findByCityContainingIgnoreCaseAndDeletedFalseAndAvailableTrue(
+                                                eq("Armenia"),
+                                                any(Pageable.class));
+        }
+
+        @Test
+        void searchAccommodationsByCity_BlankCity_ThrowsIllegalArgumentException() {
+                assertThatThrownBy(() -> accommodationService.searchAccommodationsByCity("   ", 0, 10))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("City is required");
+        }
+
+        @Test
+        void searchAccommodationsByCity_InvalidPage_ThrowsIllegalArgumentException() {
+                assertThatThrownBy(() -> accommodationService.searchAccommodationsByCity("Armenia", -1, 10))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("Page must be zero or greater");
+        }
+
+        @Test
+        void searchAccommodationsByCity_InvalidSize_ThrowsIllegalArgumentException() {
+                assertThatThrownBy(() -> accommodationService.searchAccommodationsByCity("Armenia", 0, 51))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("Size must be between 1 and 50");
         }
 }
