@@ -35,3 +35,5 @@ build/
 .env
 application.properties
 application-dev.properties
+AGENTS.md
+qodana.yaml
