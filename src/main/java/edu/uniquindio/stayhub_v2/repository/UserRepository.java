@@ -2,6 +2,7 @@ package edu.uniquindio.stayhub_v2.repository;
 
 import edu.uniquindio.stayhub_v2.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -159,6 +160,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
      *         otherwise an empty {@code Optional}
      */
     Optional<User> findByEmail(String email);
+
+    @Query("SELECT DISTINCT u FROM User u LEFT JOIN FETCH u.roles WHERE u.email = :email")
+    Optional<User> findByEmailWithRoles(String email);
 
     /*
      * Additional query methods that could be added in the future:

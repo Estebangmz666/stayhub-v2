@@ -18,6 +18,7 @@ import edu.uniquindio.stayhub_v2.repository.UserRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -153,21 +154,29 @@ public class UserService {
                 || !authentication.isAuthenticated()
                 || Objects.equals(authentication.getPrincipal(), "anonymousUser")) {
             log.warn("Attempted to get current user but no authenticated user found");
-            throw new IllegalStateException("User not authenticated");
+            throw new AccessDeniedException("User not authenticated");
         }
 
         Object principal = authentication.getPrincipal();
+
         if (principal instanceof org.springframework.security.core.userdetails.UserDetails userDetails) {
             String email = userDetails.getUsername();
 
-            return userRepository.findByEmail(email)
-                    .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado con email: " + email));
-        }
-        if (principal instanceof User user) {
-            return user;
+            return userRepository.findByEmailWithRoles(email)
+                    .orElseThrow(() -> new UsernameNotFoundException(
+                            "Usuario no encontrado con email: " + email));
         }
 
-        assert principal != null;
+        if (principal instanceof User user) {
+            return userRepository.findByEmailWithRoles(user.getEmail())
+                    .orElseThrow(() -> new UsernameNotFoundException(
+                            "Usuario no encontrado con email: " + user.getEmail()));
+        }
+
+        if (principal == null) {
+            throw new IllegalStateException("Authentication principal is null");
+        }
+
         throw new IllegalStateException("Tipo de principal no soportado: " + principal.getClass().getName());
     }
 

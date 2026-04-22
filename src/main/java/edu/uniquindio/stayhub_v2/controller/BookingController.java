@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -156,7 +157,7 @@ public class BookingController {
     })
     @GetMapping("/{reservationId}")
     public ResponseEntity<RetrieveReservationResponseDTO> getReservationById(
-            @PathVariable Long reservationId) {
+            @PathVariable @Positive(message = "ID must be positive") Long reservationId) {
 
         log.info("GET /bookings/{} - retrieving reservation detail", reservationId);
         RetrieveReservationResponseDTO response = reservationService.getReservationById(reservationId);

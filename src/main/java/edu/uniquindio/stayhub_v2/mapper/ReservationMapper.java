@@ -97,11 +97,11 @@ public interface ReservationMapper {
     @Mapping(target = "accommodationCity", source = "accommodation.city")
     @Mapping(target = "guestId", source = "guest.id")
     @Mapping(target = "guestEmail", source = "guest.email")
-    @Mapping(target = "currencyCode", source = "currency.currencyCode")
+    @Mapping(target = "currency", source = "currency.currencyCode")
     RetrieveReservationResponseDTO toRetrieveDTO(Reservation reservation);
 
     @Mapping(target = "accommodationId", source = "accommodation.id")
     @Mapping(target = "accommodationTitle", source = "accommodation.title")
-    @Mapping(target = "currencyCode", source = "currency.currencyCode")
+    @Mapping(target = "currency", source = "currency.currencyCode")
     RetrieveReservationSummaryResponseDTO toSummaryDTO(Reservation reservation);
 }

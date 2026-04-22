@@ -222,4 +222,68 @@ public class GlobalExceptionHandler {
                 HttpStatus.INTERNAL_SERVER_ERROR
         );
     }
+
+    @ExceptionHandler(ReservationNotFoundException.class)
+    public ResponseEntity<Error> handleReservationNotFoundException(ReservationNotFoundException e) {
+        log.warn("Reservation not found: {}", e.getMessage());
+        return new ResponseEntity<>(
+                new Error(e.getMessage(), HttpStatus.NOT_FOUND.value()),
+                HttpStatus.NOT_FOUND
+        );
+    }
+
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<Error> handleAccessDeniedException(org.springframework.security.access.AccessDeniedException e) {
+        log.warn("Access denied: {}", e.getMessage());
+        return new ResponseEntity<>(
+                new Error(e.getMessage(), HttpStatus.FORBIDDEN.value()),
+                HttpStatus.FORBIDDEN
+        );
+    }
+
+    @ExceptionHandler(org.springframework.security.core.userdetails.UsernameNotFoundException.class)
+    public ResponseEntity<Error> handleUsernameNotFoundException(
+            org.springframework.security.core.userdetails.UsernameNotFoundException e) {
+        log.warn("Authenticated user not found in database: {}", e.getMessage());
+        return new ResponseEntity<>(
+                new Error(e.getMessage(), HttpStatus.UNAUTHORIZED.value()),
+                HttpStatus.UNAUTHORIZED
+        );
+    }
+
+    @ExceptionHandler(jakarta.validation.ConstraintViolationException.class)
+    public ResponseEntity<Error> handleConstraintViolationException(
+            jakarta.validation.ConstraintViolationException e) {
+
+        String message = e.getConstraintViolations()
+                .stream()
+                .map(jakarta.validation.ConstraintViolation::getMessage)
+                .findFirst()
+                .orElse("Validation error");
+
+        log.warn("Constraint violation: {}", message);
+
+        return ResponseEntity.badRequest()
+                .body(new Error(message, HttpStatus.BAD_REQUEST.value()));
+    }
+
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Error> handleMethodArgumentTypeMismatchException(
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException e) {
+
+        String message = "Invalid value for parameter '" + e.getName() + "'";
+        log.warn("Argument type mismatch: {}", e.getMessage());
+
+        return ResponseEntity.badRequest()
+                .body(new Error(message, HttpStatus.BAD_REQUEST.value()));
+    }
+
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<Error> handleHttpMessageNotReadableException(
+            org.springframework.http.converter.HttpMessageNotReadableException e) {
+
+        log.warn("Malformed JSON request: {}", e.getMessage());
+        return ResponseEntity.badRequest()
+                .body(new Error("Malformed request body", HttpStatus.BAD_REQUEST.value()));
+    }
 }
