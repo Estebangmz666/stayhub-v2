@@ -2,6 +2,7 @@ package edu.uniquindio.stayhub_v2.service;
 
 import edu.uniquindio.stayhub_v2.dto.reservation.CreateReservationRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.CreateReservationResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryProjectionDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryResponseDTO;
 import edu.uniquindio.stayhub_v2.event.ReservationCreatedEvent;
@@ -19,7 +20,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -446,38 +446,27 @@ public class ReservationService {
 
         log.info("Retrieving reservation with ID: {}", reservationId);
 
-        // 1. Get the authenticated user from the security context
+        // 1. Get authenticated user
         User currentUser = userService.getCurrentUser();
         log.debug("Authenticated user: {} (ID: {})", currentUser.getEmail(), currentUser.getId());
 
-        // 2. Find the reservation or throw 404
-        Reservation reservation = reservationRepository.findById(reservationId)
+        // 2. Find reservation only if the user is authorized (guest or host)
+        Reservation reservation = reservationRepository.findAuthorizedById(
+                        reservationId,
+                        currentUser.getId()
+                )
                 .orElseThrow(() -> {
-                    log.warn("Reservation not found with ID: {}", reservationId);
+                    log.warn("Reservation not found or not accessible with ID: {} for user {}",
+                            reservationId, currentUser.getEmail());
                     return new ReservationNotFoundException(
                             "Reservation with ID " + reservationId + " not found"
                     );
                 });
 
-        // 3. Validate access: only the guest OR the host of the accommodation can see this
-        boolean isGuest = reservation.getGuest().getId().equals(currentUser.getId());
-        boolean isHost = reservation.getAccommodation().getHost().getId().equals(currentUser.getId());
+        log.info("Reservation {} retrieved successfully by user {}",
+                reservationId, currentUser.getEmail());
 
-        if (!isGuest && !isHost) {
-            log.warn("Unauthorized access attempt: user {} tried to access reservation {}",
-                    currentUser.getEmail(), reservationId);
-            throw new AccessDeniedException(
-                    "You do not have permission to view this reservation"
-            );
-        }
-
-        log.info("Reservation {} retrieved successfully by user {} (role: {})",
-                reservationId,
-                currentUser.getEmail(),
-                isHost ? "HOST" : "GUEST"
-        );
-
-        // 4. Map to the full detail DTO and return
+        // 3. Map to the full detail DTO and return
         return reservationMapper.toRetrieveDTO(reservation);
     }
 
@@ -489,8 +478,14 @@ public class ReservationService {
      */
     @Transactional(readOnly = true)
     public Page<RetrieveReservationSummaryResponseDTO> getMyReservations(int page) {
+        return getMyReservations(page, null);
+    }
 
-        log.info("Retrieving reservations page {} for authenticated user", page);
+    @Transactional(readOnly = true)
+    public Page<RetrieveReservationSummaryResponseDTO> getMyReservations(int page, String scope) {
+
+        log.info("Retrieving reservations page {} for authenticated user with scope '{}'",
+                page, scope);
 
         // 1. Get the authenticated user from the security context
         User currentUser = userService.getCurrentUser();
@@ -499,23 +494,43 @@ public class ReservationService {
         // 2. Build pageable with fixed page size of 10, ordered by startDate descending
         Pageable pageable = PageRequest.of(page, 10, Sort.by(Sort.Direction.DESC, "startDate"));
 
-        // 3. Check if the user has the HOST role
-        boolean isHost = currentUser.getRoles().contains(Role.HOST);
+        // 3. Resolve selection strategy
+        Page<RetrieveReservationSummaryProjectionDTO> reservations;
+        String normalizedScope = scope == null ? "" : scope.trim().toLowerCase();
 
-        Page<Reservation> reservations;
-
-        if (isHost) {
-            // HOST: returns all reservations for accommodations they own
-            log.debug("User {} is HOST, fetching reservations for their accommodations",
-                    currentUser.getEmail());
-            reservations = reservationRepository
-                    .findByAccommodationHostId(currentUser.getId(), pageable);
+        if (normalizedScope.isBlank()) {
+            // Backward compatibility: host-first behavior
+            boolean isHost = currentUser.getRoles().contains(Role.HOST);
+            if (isHost) {
+                log.debug("No scope provided; applying legacy host-first behavior for user {}",
+                        currentUser.getEmail());
+                reservations = reservationRepository
+                        .findSummaryByHostId(currentUser.getId(), pageable);
+            } else {
+                log.debug("No scope provided; applying legacy guest behavior for user {}",
+                        currentUser.getEmail());
+                reservations = reservationRepository
+                        .findSummaryByGuestId(currentUser.getId(), pageable);
+            }
         } else {
-            // GUEST: returns only their own reservations
-            log.debug("User {} is GUEST, fetching their personal reservations",
-                    currentUser.getEmail());
-            reservations = reservationRepository
-                    .findByGuestId(currentUser.getId(), pageable);
+            reservations = switch (normalizedScope) {
+                case "host" -> {
+                    log.debug("Scope host selected by user {}", currentUser.getEmail());
+                    yield reservationRepository.findSummaryByHostId(currentUser.getId(), pageable);
+                }
+                case "guest" -> {
+                    log.debug("Scope guest selected by user {}", currentUser.getEmail());
+                    yield reservationRepository.findSummaryByGuestId(currentUser.getId(), pageable);
+                }
+                case "all" -> {
+                    log.debug("Scope all selected by user {}", currentUser.getEmail());
+                    yield reservationRepository
+                            .findSummaryByGuestOrHostId(currentUser.getId(), pageable);
+                }
+                default -> throw new IllegalArgumentException(
+                        "Invalid scope value. Allowed values: host, guest, all"
+                );
+            };
         }
 
         log.info("Found {} reservations (page {}/{}) for user {}",
@@ -525,7 +540,16 @@ public class ReservationService {
                 currentUser.getEmail()
         );
 
-        // 4. Map each Reservation entity to the summary DTO and return the page
-        return reservations.map(reservationMapper::toSummaryDTO);
+        // 4. Map projection to API DTO preserving the contract
+        return reservations.map(reservation -> new RetrieveReservationSummaryResponseDTO(
+                reservation.id(),
+                reservation.accommodationId(),
+                reservation.accommodationTitle(),
+                reservation.startDate(),
+                reservation.endDate(),
+                reservation.totalPrice(),
+                reservation.currency().getCurrencyCode(),
+                reservation.status()
+        ));
     }
 }

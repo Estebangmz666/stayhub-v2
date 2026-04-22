@@ -47,23 +47,21 @@ import java.util.Objects;
 @Slf4j
 public class GlobalExceptionHandler {
 
-    /**
-     * Handles authentication-related exceptions.
-     *
-     * <p>Catches exceptions related to invalid login attempts, including
-     * incorrect passwords and non-existent users. Returns a generic error
-     * message to avoid leaking sensitive information about which part of
-     * the authentication failed.</p>
-     *
-     * @param e The runtime exception (InvalidPasswordException or UserNotFoundException)
-     * @return ResponseEntity with UNAUTHORIZED status and generic error message
-     */
-    @ExceptionHandler({InvalidPasswordException.class, UserNotFoundException.class})
-    public ResponseEntity<Error> handleAuthExceptions(RuntimeException e) {
+    @ExceptionHandler(InvalidPasswordException.class)
+    public ResponseEntity<Error> handleInvalidPasswordException(InvalidPasswordException e) {
         log.warn("Authentication error: {}", e.getMessage());
         return new ResponseEntity<>(
                 new Error("Invalid login attempt detected", HttpStatus.UNAUTHORIZED.value()),
                 HttpStatus.UNAUTHORIZED
+        );
+    }
+
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<Error> handleUserNotFoundException(UserNotFoundException e) {
+        log.warn("User not found: {}", e.getMessage());
+        return new ResponseEntity<>(
+                new Error(e.getMessage(), HttpStatus.NOT_FOUND.value()),
+                HttpStatus.NOT_FOUND
         );
     }
 

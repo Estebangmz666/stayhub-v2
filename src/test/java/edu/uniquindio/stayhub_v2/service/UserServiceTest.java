@@ -7,7 +7,6 @@ import edu.uniquindio.stayhub_v2.dto.auth.ChangePasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.user.UserLoginRequestDTO;
 import edu.uniquindio.stayhub_v2.exception.InvalidPasswordException;
 import edu.uniquindio.stayhub_v2.exception.InvalidRecoveryCodeException;
-import edu.uniquindio.stayhub_v2.exception.UserNotFoundException;
 import edu.uniquindio.stayhub_v2.mapper.UserMapper;
 import edu.uniquindio.stayhub_v2.model.User;
 import edu.uniquindio.stayhub_v2.repository.UserRepository;
@@ -90,7 +89,7 @@ public class UserServiceTest {
         when(userRepository.findByEmail(request.email())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> userService.loginUser(request))
-                .isInstanceOf(UserNotFoundException.class);
+                .isInstanceOf(InvalidPasswordException.class);
     }
 
     @Test

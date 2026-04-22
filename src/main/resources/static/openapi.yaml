@@ -302,6 +302,126 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /api/v2/bookings/{reservationId}:
+    get:
+      tags:
+        - Bookings
+      summary: Get reservation detail by ID
+      description: |
+        Returns full reservation detail.
+        For security reasons, returns 404 both when the reservation does not exist
+        and when the authenticated user has no access to it.
+      operationId: getReservationById
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: reservationId
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+          description: Reservation identifier
+      responses:
+        '200':
+          description: Reservation retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetrieveReservationResponse'
+        '400':
+          description: Invalid reservation ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized - valid JWT token required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Reservation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v2/bookings/my-reservations:
+    get:
+      tags:
+        - Bookings
+      summary: Get paginated list of my reservations
+      description: |
+        Returns paginated reservations for the authenticated user.
+        If `scope` is omitted, legacy behavior is preserved:
+        - HOST users: host reservations
+        - non-HOST users: guest reservations
+      operationId: getMyReservations
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Zero-based page number
+        - in: query
+          name: scope
+          required: false
+          schema:
+            type: string
+            enum: [host, guest, all]
+          description: Optional filter scope
+      responses:
+        '200':
+          description: Reservations retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RetrieveReservationSummaryResponse'
+                  pageable:
+                    type: object
+                  totalElements:
+                    type: integer
+                    format: int64
+                  totalPages:
+                    type: integer
+                  size:
+                    type: integer
+                  number:
+                    type: integer
+                  numberOfElements:
+                    type: integer
+                  first:
+                    type: boolean
+                  last:
+                    type: boolean
+                  empty:
+                    type: boolean
+        '400':
+          description: Invalid page or scope parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized - valid JWT token required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   # ─────────────────────────────────────────────
   # NOTIFICATIONS — new endpoint (v1.1)
   # ─────────────────────────────────────────────
@@ -670,6 +790,108 @@ components:
         - depositAmount
         - bankAccountNumber
         - paymentDeadline
+
+    RetrieveReservationSummaryResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        accommodationId:
+          type: integer
+          format: int64
+        accommodationTitle:
+          type: string
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        totalPrice:
+          type: number
+          format: double
+        currency:
+          type: string
+          example: COP
+        status:
+          type: string
+          enum: [ACTIVE, COMPLETED, CANCELLED, NO_SHOW]
+      required:
+        - id
+        - accommodationId
+        - accommodationTitle
+        - startDate
+        - endDate
+        - totalPrice
+        - currency
+        - status
+
+    RetrieveReservationResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        accommodationId:
+          type: integer
+          format: int64
+        accommodationTitle:
+          type: string
+        accommodationCity:
+          type: string
+        guestId:
+          type: integer
+          format: int64
+        guestEmail:
+          type: string
+          format: email
+        totalPrice:
+          type: number
+          format: double
+        currency:
+          type: string
+          example: COP
+        depositAmount:
+          type: number
+          format: double
+        depositPaid:
+          type: boolean
+        paymentDeadline:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [ACTIVE, COMPLETED, CANCELLED, NO_SHOW]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - startDate
+        - endDate
+        - accommodationId
+        - accommodationTitle
+        - accommodationCity
+        - guestId
+        - guestEmail
+        - totalPrice
+        - currency
+        - depositAmount
+        - depositPaid
+        - paymentDeadline
+        - status
+        - createdAt
+        - updatedAt
 
     PaymentNotification:
       type: object

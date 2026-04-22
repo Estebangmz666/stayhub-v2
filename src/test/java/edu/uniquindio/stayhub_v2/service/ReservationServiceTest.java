@@ -2,10 +2,15 @@ package edu.uniquindio.stayhub_v2.service;
 
 import edu.uniquindio.stayhub_v2.dto.reservation.CreateReservationRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.CreateReservationResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryProjectionDTO;
+import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryResponseDTO;
 import edu.uniquindio.stayhub_v2.event.ReservationCreatedEvent;
 import edu.uniquindio.stayhub_v2.exception.AccommodationNotFoundException;
+import edu.uniquindio.stayhub_v2.exception.ReservationNotFoundException;
 import edu.uniquindio.stayhub_v2.mapper.ReservationMapper;
 import edu.uniquindio.stayhub_v2.model.Accommodation;
+import edu.uniquindio.stayhub_v2.model.Role;
 import edu.uniquindio.stayhub_v2.model.Reservation;
 import edu.uniquindio.stayhub_v2.model.ReservationStatus;
 import edu.uniquindio.stayhub_v2.model.User;
@@ -19,25 +24,27 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.Currency;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-/**
- * Unit tests for {@link ReservationService}.
- *
- * <p>Verifies the core booking flow including payment detail calculation:
- * deposit amount (20%), bank account number and 3-day payment deadline.</p>
- */
 @ExtendWith(MockitoExtension.class)
 class ReservationServiceTest {
 
@@ -61,6 +68,7 @@ class ReservationServiceTest {
 
     private Accommodation accommodation;
     private User guest;
+    private User host;
     private Reservation savedReservation;
 
     private static final String BANK_ACCOUNT = "3001234567890";
@@ -69,7 +77,6 @@ class ReservationServiceTest {
 
     @BeforeEach
     void setUp() {
-        // Inject @Value fields via ReflectionTestUtils
         ReflectionTestUtils.setField(reservationService, "bankAccountNumber", BANK_ACCOUNT);
         ReflectionTestUtils.setField(reservationService, "depositPercentage", DEPOSIT_PERCENTAGE);
         ReflectionTestUtils.setField(reservationService, "deadlineDays", DEADLINE_DAYS);
@@ -77,14 +84,23 @@ class ReservationServiceTest {
         guest = User.builder()
                 .id(1L)
                 .email("guest@mail.com")
-                .fullName("Juan Pérez")
+                .fullName("Juan Perez")
+                .roles(Set.of(Role.GUEST))
+                .build();
+
+        host = User.builder()
+                .id(2L)
+                .email("host@mail.com")
+                .fullName("Laura Host")
+                .roles(Set.of(Role.HOST))
                 .build();
 
         accommodation = Accommodation.builder()
                 .id(10L)
-                .title("Cabaña en el Quindío")
+                .title("Cabana en Quindio")
                 .pricePerNight(new BigDecimal("200000"))
                 .currency(Currency.getInstance("COP"))
+                .host(host)
                 .build();
 
         savedReservation = new Reservation();
@@ -101,9 +117,6 @@ class ReservationServiceTest {
         savedReservation.setEndDate(LocalDateTime.now().plusDays(13));
     }
 
-    // ---------------------------------------------------------------------------
-    // Helper: build a base DTO from savedReservation
-    // ---------------------------------------------------------------------------
     private CreateReservationResponseDTO baseDto() {
         return new CreateReservationResponseDTO(
                 savedReservation.getId(),
@@ -115,17 +128,46 @@ class ReservationServiceTest {
                 accommodation.getId(),
                 accommodation.getTitle(),
                 guest.getId(),
-                null, null, null  // payment fields — mapper ignores them
+                null, null, null
         );
     }
 
-    // ---------------------------------------------------------------------------
-    // Tests
-    // ---------------------------------------------------------------------------
+    private RetrieveReservationResponseDTO retrieveDto() {
+        return new RetrieveReservationResponseDTO(
+                savedReservation.getId(),
+                savedReservation.getStartDate(),
+                savedReservation.getEndDate(),
+                accommodation.getId(),
+                accommodation.getTitle(),
+                "Armenia",
+                guest.getId(),
+                guest.getEmail(),
+                savedReservation.getTotalPrice(),
+                savedReservation.getCurrency().getCurrencyCode(),
+                savedReservation.getDepositAmount(),
+                savedReservation.getDepositPaid(),
+                savedReservation.getPaymentDeadline(),
+                savedReservation.getStatus(),
+                LocalDateTime.now().minusDays(1),
+                LocalDateTime.now()
+        );
+    }
+
+    private RetrieveReservationSummaryProjectionDTO summaryProjection() {
+        return new RetrieveReservationSummaryProjectionDTO(
+                savedReservation.getId(),
+                accommodation.getId(),
+                accommodation.getTitle(),
+                savedReservation.getStartDate(),
+                savedReservation.getEndDate(),
+                savedReservation.getTotalPrice(),
+                savedReservation.getCurrency(),
+                savedReservation.getStatus()
+        );
+    }
 
     @Test
     void createReservation_ValidRequest_ReturnsResponseWithPaymentDetails() {
-        // Arrange
         LocalDateTime start = LocalDateTime.now().plusDays(10);
         LocalDateTime end = LocalDateTime.now().plusDays(13);
         CreateReservationRequestDTO request = new CreateReservationRequestDTO(10L, start, end);
@@ -136,15 +178,11 @@ class ReservationServiceTest {
         when(reservationRepository.save(any(Reservation.class))).thenReturn(savedReservation);
         when(reservationMapper.toDTO(savedReservation)).thenReturn(baseDto());
 
-        // Act
         CreateReservationResponseDTO response = reservationService.createReservation(request);
 
-        // Assert — payment fields present
         assertThat(response.depositAmount()).isNotNull();
         assertThat(response.bankAccountNumber()).isEqualTo(BANK_ACCOUNT);
         assertThat(response.paymentDeadline()).isNotNull();
-
-        // Assert — other core fields intact
         assertThat(response.id()).isEqualTo(100L);
         assertThat(response.status()).isEqualTo(ReservationStatus.ACTIVE);
 
@@ -153,8 +191,6 @@ class ReservationServiceTest {
 
     @Test
     void createReservation_CalculatesCorrect20Percent() {
-        // Arrange — accommodation costs 200,000 COP/night, 3 nights = 600,000 total
-        //            20% of 600,000 = 120,000
         LocalDateTime start = LocalDateTime.now().plusDays(10);
         LocalDateTime end = LocalDateTime.now().plusDays(13);
         CreateReservationRequestDTO request = new CreateReservationRequestDTO(10L, start, end);
@@ -165,10 +201,8 @@ class ReservationServiceTest {
         when(reservationRepository.save(any(Reservation.class))).thenReturn(savedReservation);
         when(reservationMapper.toDTO(savedReservation)).thenReturn(baseDto());
 
-        // Act
         CreateReservationResponseDTO response = reservationService.createReservation(request);
 
-        // Assert — 20% of 600,000 = 120,000.00
         BigDecimal expectedDeposit = new BigDecimal("600000")
                 .multiply(BigDecimal.valueOf(20))
                 .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
@@ -178,9 +212,8 @@ class ReservationServiceTest {
 
     @Test
     void createReservation_PaymentDeadlineIs3DaysFromNow() {
-        // Arrange
         LocalDateTime before = LocalDateTime.now().plusDays(3).minusSeconds(5);
-        LocalDateTime after  = LocalDateTime.now().plusDays(3).plusSeconds(5);
+        LocalDateTime after = LocalDateTime.now().plusDays(3).plusSeconds(5);
 
         LocalDateTime start = LocalDateTime.now().plusDays(10);
         LocalDateTime end = LocalDateTime.now().plusDays(13);
@@ -192,16 +225,13 @@ class ReservationServiceTest {
         when(reservationRepository.save(any(Reservation.class))).thenReturn(savedReservation);
         when(reservationMapper.toDTO(savedReservation)).thenReturn(baseDto());
 
-        // Act
         CreateReservationResponseDTO response = reservationService.createReservation(request);
 
-        // Assert — deadline is within ±5 seconds of now+3days
         assertThat(response.paymentDeadline()).isBetween(before, after);
     }
 
     @Test
     void createReservation_PersistsDepositAmountAndDeadlineInEntity() {
-        // Arrange
         LocalDateTime start = LocalDateTime.now().plusDays(10);
         LocalDateTime end = LocalDateTime.now().plusDays(13);
         CreateReservationRequestDTO request = new CreateReservationRequestDTO(10L, start, end);
@@ -214,10 +244,8 @@ class ReservationServiceTest {
 
         ArgumentCaptor<Reservation> captor = ArgumentCaptor.forClass(Reservation.class);
 
-        // Act
         reservationService.createReservation(request);
 
-        // Assert — entity persisted with deposit fields set
         verify(reservationRepository).save(captor.capture());
         Reservation persisted = captor.getValue();
 
@@ -254,5 +282,146 @@ class ReservationServiceTest {
                 .hasMessageContaining("already booked");
 
         verify(reservationRepository, never()).save(any());
+    }
+
+    @Test
+    void getReservationById_AuthorizedGuest_ReturnsReservation() {
+        when(userService.getCurrentUser()).thenReturn(guest);
+        when(reservationRepository.findAuthorizedById(100L, guest.getId()))
+                .thenReturn(Optional.of(savedReservation));
+        when(reservationMapper.toRetrieveDTO(savedReservation)).thenReturn(retrieveDto());
+
+        RetrieveReservationResponseDTO response = reservationService.getReservationById(100L);
+
+        assertThat(response.id()).isEqualTo(100L);
+        assertThat(response.guestId()).isEqualTo(guest.getId());
+        verify(reservationRepository).findAuthorizedById(100L, guest.getId());
+    }
+
+    @Test
+    void getReservationById_AuthorizedHost_ReturnsReservation() {
+        when(userService.getCurrentUser()).thenReturn(host);
+        when(reservationRepository.findAuthorizedById(100L, host.getId()))
+                .thenReturn(Optional.of(savedReservation));
+        when(reservationMapper.toRetrieveDTO(savedReservation)).thenReturn(retrieveDto());
+
+        RetrieveReservationResponseDTO response = reservationService.getReservationById(100L);
+
+        assertThat(response.id()).isEqualTo(100L);
+        assertThat(response.accommodationId()).isEqualTo(accommodation.getId());
+        verify(reservationRepository).findAuthorizedById(100L, host.getId());
+    }
+
+    @Test
+    void getReservationById_NotFoundOrNotAuthorized_ThrowsReservationNotFoundException() {
+        User anotherUser = User.builder()
+                .id(99L)
+                .email("other@mail.com")
+                .fullName("Other User")
+                .build();
+
+        when(userService.getCurrentUser()).thenReturn(anotherUser);
+        when(reservationRepository.findAuthorizedById(100L, anotherUser.getId()))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> reservationService.getReservationById(100L))
+                .isInstanceOf(ReservationNotFoundException.class)
+                .hasMessageContaining("100");
+
+        verify(reservationMapper, never()).toRetrieveDTO(any());
+    }
+
+    @Test
+    void getMyReservations_DefaultScope_HostUserUsesHostQuery() {
+        when(userService.getCurrentUser()).thenReturn(host);
+        Page<RetrieveReservationSummaryProjectionDTO> hostPage = new PageImpl<>(List.of(summaryProjection()));
+        when(reservationRepository.findSummaryByHostId(eq(host.getId()), any(Pageable.class)))
+                .thenReturn(hostPage);
+
+        Page<RetrieveReservationSummaryResponseDTO> response = reservationService.getMyReservations(0);
+
+        assertThat(response.getContent()).hasSize(1);
+        verify(reservationRepository).findSummaryByHostId(eq(host.getId()), any(Pageable.class));
+        verify(reservationRepository, never()).findSummaryByGuestId(eq(host.getId()), any(Pageable.class));
+    }
+
+    @Test
+    void getMyReservations_DefaultScope_GuestUserUsesGuestQuery() {
+        when(userService.getCurrentUser()).thenReturn(guest);
+        Page<RetrieveReservationSummaryProjectionDTO> guestPage = new PageImpl<>(List.of(summaryProjection()));
+        when(reservationRepository.findSummaryByGuestId(eq(guest.getId()), any(Pageable.class)))
+                .thenReturn(guestPage);
+
+        Page<RetrieveReservationSummaryResponseDTO> response = reservationService.getMyReservations(0);
+
+        assertThat(response.getContent()).hasSize(1);
+        verify(reservationRepository).findSummaryByGuestId(eq(guest.getId()), any(Pageable.class));
+        verify(reservationRepository, never()).findSummaryByHostId(eq(guest.getId()), any(Pageable.class));
+    }
+
+    @Test
+    void getMyReservations_ScopeGuest_UsesGuestQuery() {
+        User dualRole = User.builder()
+                .id(3L)
+                .email("dual@mail.com")
+                .fullName("Dual User")
+                .roles(Set.of(Role.HOST, Role.GUEST))
+                .build();
+
+        when(userService.getCurrentUser()).thenReturn(dualRole);
+        Page<RetrieveReservationSummaryProjectionDTO> guestPage = new PageImpl<>(List.of(summaryProjection()));
+        when(reservationRepository.findSummaryByGuestId(eq(dualRole.getId()), any(Pageable.class)))
+                .thenReturn(guestPage);
+
+        Page<RetrieveReservationSummaryResponseDTO> response =
+                reservationService.getMyReservations(0, "guest");
+
+        assertThat(response.getContent()).hasSize(1);
+        verify(reservationRepository).findSummaryByGuestId(eq(dualRole.getId()), any(Pageable.class));
+    }
+
+    @Test
+    void getMyReservations_ScopeHost_UsesHostQuery() {
+        when(userService.getCurrentUser()).thenReturn(host);
+        Page<RetrieveReservationSummaryProjectionDTO> hostPage = new PageImpl<>(List.of(summaryProjection()));
+        when(reservationRepository.findSummaryByHostId(eq(host.getId()), any(Pageable.class)))
+                .thenReturn(hostPage);
+
+        Page<RetrieveReservationSummaryResponseDTO> response =
+                reservationService.getMyReservations(0, "host");
+
+        assertThat(response.getContent()).hasSize(1);
+        verify(reservationRepository).findSummaryByHostId(eq(host.getId()), any(Pageable.class));
+    }
+
+    @Test
+    void getMyReservations_ScopeAll_UsesDistinctCombinedQuery() {
+        User dualRole = User.builder()
+                .id(3L)
+                .email("dual@mail.com")
+                .fullName("Dual User")
+                .roles(Set.of(Role.HOST, Role.GUEST))
+                .build();
+
+        when(userService.getCurrentUser()).thenReturn(dualRole);
+        Page<RetrieveReservationSummaryProjectionDTO> allPage = new PageImpl<>(List.of(summaryProjection()));
+        when(reservationRepository.findSummaryByGuestOrHostId(
+                eq(dualRole.getId()), any(Pageable.class))).thenReturn(allPage);
+
+        Page<RetrieveReservationSummaryResponseDTO> response =
+                reservationService.getMyReservations(0, "all");
+
+        assertThat(response.getContent()).hasSize(1);
+        verify(reservationRepository).findSummaryByGuestOrHostId(
+                eq(dualRole.getId()), any(Pageable.class));
+    }
+
+    @Test
+    void getMyReservations_InvalidScope_ThrowsIllegalArgumentException() {
+        when(userService.getCurrentUser()).thenReturn(guest);
+
+        assertThatThrownBy(() -> reservationService.getMyReservations(0, "invalid"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid scope value");
     }
 }

@@ -310,7 +310,7 @@ public class UserService {
         User user = userRepository.findByEmail(userLoginRequestDTO.email())
                 .orElseThrow(() -> {
                     log.warn("Login failed: User not found with email: {}", userLoginRequestDTO.email());
-                    return new UserNotFoundException("Invalid credentials");
+                    return new InvalidPasswordException("Invalid credentials");
                 });
         log.debug("User found with email: {}", user.getEmail());
 

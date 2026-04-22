@@ -1,11 +1,13 @@
 package edu.uniquindio.stayhub_v2.controller;
 
+import edu.uniquindio.stayhub_v2.dto.auth.Error;
 import edu.uniquindio.stayhub_v2.dto.reservation.CreateReservationRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.CreateReservationResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryResponseDTO;
 import edu.uniquindio.stayhub_v2.service.ReservationService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -66,17 +68,14 @@ public class BookingController {
                     description = "Invalid request - Validation failed",
                     content = @Content(
                             mediaType = "application/json",
+                            schema = @Schema(implementation = Error.class),
                             examples = @ExampleObject(
                                     name = "Validation Error",
                                     summary = "Example when validation fails",
                                     value = """
                         {
-                            "timestamp": "2025-04-10T10:30:00",
-                            "status": 400,
-                            "errors": [
-                                "End date must be after start date",
-                                "Start date must be in the future"
-                            ]
+                            "message": "End date must be after start date",
+                            "code": 400
                         }
                         """
                             )
@@ -87,13 +86,13 @@ public class BookingController {
                     description = "Accommodation not found",
                     content = @Content(
                             mediaType = "application/json",
+                            schema = @Schema(implementation = Error.class),
                             examples = @ExampleObject(
                                     name = "Accommodation Not Found",
                                     summary = "Example when accommodation doesn't exist",
                                     value = """
                         {
-                            "timestamp": "2025-04-10T10:30:00",
-                            "status": 404,
+                            "code": 404,
                             "message": "Accommodation with ID 999 not found"
                         }
                         """
@@ -105,13 +104,13 @@ public class BookingController {
                     description = "Conflict - Accommodation not available for selected dates",
                     content = @Content(
                             mediaType = "application/json",
+                            schema = @Schema(implementation = Error.class),
                             examples = @ExampleObject(
                                     name = "Dates Unavailable",
                                     summary = "Example when accommodation is already booked",
                                     value = """
                         {
-                            "timestamp": "2025-04-10T10:30:00",
-                            "status": 409,
+                            "code": 409,
                             "message": "Accommodation is not available for the selected dates"
                         }
                         """
@@ -123,13 +122,13 @@ public class BookingController {
                     description = "Internal server error",
                     content = @Content(
                             mediaType = "application/json",
+                            schema = @Schema(implementation = Error.class),
                             examples = @ExampleObject(
                                     name = "Server Error",
                                     summary = "Example of an unexpected server error",
                                     value = """
                         {
-                            "timestamp": "2025-04-10T10:30:00",
-                            "status": 500,
+                            "code": 500,
                             "message": "An unexpected error occurred while processing your request"
                         }
                         """
@@ -152,7 +151,8 @@ public class BookingController {
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Reservation found and returned successfully"),
-            @ApiResponse(responseCode = "403", description = "Access denied - user is neither the guest nor the host"),
+            @ApiResponse(responseCode = "400", description = "Invalid reservation ID"),
+            @ApiResponse(responseCode = "401", description = "User not authenticated"),
             @ApiResponse(responseCode = "404", description = "Reservation not found")
     })
     @GetMapping("/{reservationId}")
@@ -167,20 +167,26 @@ public class BookingController {
     @Operation(
             summary = "Get paginated list of my reservations",
             description = "Returns a paginated list of reservations for the authenticated user. " +
-                    "If the user is a HOST, returns reservations for all their accommodations. " +
-                    "If the user is a GUEST, returns their own reservations. " +
+                    "Without scope, keeps legacy behavior: if the user is a HOST, " +
+                    "returns reservations for all their accommodations; otherwise returns " +
+                    "their reservations as GUEST. " +
+                    "Optional scope can be host, guest, or all. " +
                     "Results are sorted by start date descending, 10 per page."
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Reservations retrieved successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid page or scope parameter"),
             @ApiResponse(responseCode = "401", description = "User not authenticated")
     })
     @GetMapping("/my-reservations")
     public ResponseEntity<Page<RetrieveReservationSummaryResponseDTO>> getMyReservations(
-            @RequestParam(defaultValue = "0") int page) {
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Optional filter: host, guest, all")
+            @RequestParam(required = false) String scope) {
 
-        log.info("GET /bookings/my-reservations?page={} - retrieving reservations list", page);
-        Page<RetrieveReservationSummaryResponseDTO> response = reservationService.getMyReservations(page);
+        log.info("GET /bookings/my-reservations?page={}&scope={} - retrieving reservations list",
+                page, scope);
+        Page<RetrieveReservationSummaryResponseDTO> response = reservationService.getMyReservations(page, scope);
         return ResponseEntity.ok(response);
     }
 }

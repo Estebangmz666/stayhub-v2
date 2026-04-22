@@ -1,5 +1,6 @@
 package edu.uniquindio.stayhub_v2.repository;
 
+import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryProjectionDTO;
 import edu.uniquindio.stayhub_v2.model.Reservation;
 import edu.uniquindio.stayhub_v2.model.ReservationStatus;
 import org.jspecify.annotations.NonNull;
@@ -257,11 +258,106 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             @Param("to") LocalDateTime to
     );
 
+    @Query("""
+    SELECT r FROM Reservation r
+    WHERE r.id = :reservationId
+    AND (
+        r.guest.id = :userId
+        OR r.accommodation.host.id = :userId
+    )
+""")
+    Optional<Reservation> findAuthorizedById(
+            @Param("reservationId") Long reservationId,
+            @Param("userId") Long userId
+    );
+
     Optional<Reservation> findById(@NonNull Long id);
 
     Page<Reservation> findByGuestId(Long guestId, Pageable pageable);
 
     Page<Reservation> findByAccommodationHostId(Long hostId, Pageable pageable);
+
+    @Query(
+            value = """
+        SELECT DISTINCT r FROM Reservation r
+        WHERE r.guest.id = :userId
+        OR r.accommodation.host.id = :userId
+    """,
+            countQuery = """
+        SELECT COUNT(DISTINCT r.id) FROM Reservation r
+        WHERE r.guest.id = :userId
+        OR r.accommodation.host.id = :userId
+    """
+    )
+    Page<Reservation> findByGuestIdOrAccommodationHostIdDistinct(
+            @Param("userId") Long userId,
+            Pageable pageable
+    );
+
+    @Query("""
+    SELECT new edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryProjectionDTO(
+        r.id,
+        r.accommodation.id,
+        r.accommodation.title,
+        r.startDate,
+        r.endDate,
+        r.totalPrice,
+        r.currency,
+        r.status
+    )
+    FROM Reservation r
+    WHERE r.guest.id = :guestId
+""")
+    Page<RetrieveReservationSummaryProjectionDTO> findSummaryByGuestId(
+            @Param("guestId") Long guestId,
+            Pageable pageable
+    );
+
+    @Query("""
+    SELECT new edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryProjectionDTO(
+        r.id,
+        r.accommodation.id,
+        r.accommodation.title,
+        r.startDate,
+        r.endDate,
+        r.totalPrice,
+        r.currency,
+        r.status
+    )
+    FROM Reservation r
+    WHERE r.accommodation.host.id = :hostId
+""")
+    Page<RetrieveReservationSummaryProjectionDTO> findSummaryByHostId(
+            @Param("hostId") Long hostId,
+            Pageable pageable
+    );
+
+    @Query(
+            value = """
+        SELECT DISTINCT new edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryProjectionDTO(
+            r.id,
+            r.accommodation.id,
+            r.accommodation.title,
+            r.startDate,
+            r.endDate,
+            r.totalPrice,
+            r.currency,
+            r.status
+        )
+        FROM Reservation r
+        WHERE r.guest.id = :userId
+        OR r.accommodation.host.id = :userId
+    """,
+            countQuery = """
+        SELECT COUNT(DISTINCT r.id) FROM Reservation r
+        WHERE r.guest.id = :userId
+        OR r.accommodation.host.id = :userId
+    """
+    )
+    Page<RetrieveReservationSummaryProjectionDTO> findSummaryByGuestOrHostId(
+            @Param("userId") Long userId,
+            Pageable pageable
+    );
 
     /*
      * Additional query methods that could be added in the future:
