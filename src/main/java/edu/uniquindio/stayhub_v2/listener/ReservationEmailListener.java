@@ -68,6 +68,14 @@ public class ReservationEmailListener {
                     sendGuestEmailSafely(guest, accommodation, reservation)
             );
 
+            //10 delays secs for mailtrap purposes xd
+            guestEmailFuture.join();
+            try {
+                Thread.sleep(10000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+
             CompletableFuture<Void> hostEmailFuture = CompletableFuture.runAsync(() ->
                     sendHostEmailSafely(host, guest, accommodation, reservation)
             );
