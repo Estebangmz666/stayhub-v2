@@ -10,14 +10,15 @@ import jakarta.validation.constraints.NotBlank;
  * @param email The user's email address.
  * @param password The user's password.
  *
- * @author Esteban Gómez León
+ * @author StayHub Dev Team
  * @version 1.0
+ * @since 1.0
  */
-@Schema(description = "Data Transfer Object for user login")
+@Schema(description = "Request body used to authenticate a user with email and password.")
 public record UserLoginRequestDTO(
         @NotBlank(message = "Email is required")
         @Email(message = "Invalid email format")
-        @Schema(description = "The user´s email address", example = "john.doe@example.com")
+        @Schema(description = "The user's email address", example = "john.doe@example.com")
         String email,
 
         @NotBlank(message = "Password is required")

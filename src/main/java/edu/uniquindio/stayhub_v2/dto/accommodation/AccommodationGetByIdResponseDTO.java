@@ -26,10 +26,11 @@ import java.util.List;
  * @param images A list of URLs for additional images of the accommodation.
  * @param available Indicates whether the accommodation is currently available for booking.
  *
- * @author Esteban Gómez León
+ * @author StayHub Dev Team
  * @version 1.0
+ * @since 1.0
  */
-@Schema(description = "Data Transfer Object for accommodation details")
+@Schema(description = "Detailed response body returned when retrieving an accommodation by its identifier.")
 public record AccommodationGetByIdResponseDTO (
         @NotNull(message = "Host cannot be null")
         @Schema(description = "The user who owns the accommodation")
@@ -37,44 +38,44 @@ public record AccommodationGetByIdResponseDTO (
 
         @NotBlank(message = "Title cannot be blank")
         @Size(max = 100, message = "Title cannot exceed 100 characters")
-        @Schema(description = "The title of the accommodation")
+        @Schema(description = "The title of the accommodation", example = "Beachfront Villa with Pool")
         String title,
 
         @NotBlank(message = "Description cannot be blank")
         @Size(max = 1000, message = "Description cannot exceed 1000 characters")
-        @Schema(description = "A detailed description of the accommodation")
+        @Schema(description = "A detailed description of the accommodation", example = "Spacious villa with private pool and direct beach access.")
         String description,
 
         @NotNull(message = "Capacity cannot be null")
         @Positive(message = "Capacity must be a positive number")
-        @Schema(description = "The maximum number of guests allowed")
+        @Schema(description = "The maximum number of guests allowed", example = "6")
         Integer capacity,
 
         @NotNull(message = "Price per night cannot be null")
         @Positive(message = "Price per night must be a positive number")
-        @Schema(description = "The price per night for the accommodation")
+        @Schema(description = "The price per night for the accommodation", example = "250000.00")
         BigDecimal pricePerNight,
 
         @URL(message = "Main image must be a valid URL")
-        @Schema(description = "The URL of the main image for the accommodation")
+        @Schema(description = "The URL of the main image for the accommodation", example = "https://images.example.com/accommodations/main/beachfront-villa.jpg")
         String mainImage,
 
         @NotBlank(message = "Location description cannot be blank")
         @Size(max = 100, message = "Location description cannot exceed 100 characters")
-        @Schema(description = "A description of the location, such as neighborhood or landmarks")
+        @Schema(description = "A description of the location, such as neighborhood or landmarks", example = "Near the main beach and local restaurants")
         String locationDescription,
 
         @NotBlank(message = "City cannot be blank")
         @Size(max = 100, message = "City cannot exceed 100 characters")
-        @Schema(description = "The city where the accommodation is located")
+        @Schema(description = "The city where the accommodation is located", example = "Cartagena")
         String city,
 
         @NotNull(message = "Images cannot be null")
-        @Schema(description = "A list of URLs for additional images of the accommodation")
+        @Schema(description = "A list of URLs for additional images of the accommodation", example = "[\"https://images.example.com/accommodations/gallery/villa-1.jpg\"]")
         List<@URL String> images,
 
         @NotNull(message = "Available cannot be null")
-        @Schema(description = "Indicates whether the accommodation is currently available for booking")
+        @Schema(description = "Indicates whether the accommodation is currently available for booking", example = "true")
         boolean available
 
         //List<Comments> comments

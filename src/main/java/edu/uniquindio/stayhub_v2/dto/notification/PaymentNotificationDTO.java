@@ -22,8 +22,9 @@ import java.util.Currency;
  *
  * @author StayHub Dev Team
  * @version 1.0
+ * @since 1.0
  */
-@Schema(description = "Notification DTO for a pending advance payment on a reservation.")
+@Schema(description = "In-app notification response for a pending advance payment on a reservation.")
 public record PaymentNotificationDTO(
 
         @Schema(description = "Unique identifier of the reservation", example = "12345")

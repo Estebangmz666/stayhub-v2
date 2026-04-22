@@ -25,10 +25,11 @@ import java.util.Set;
  * @param birthDate The user's birthdate.
  * @param profilePicture The user's profile picture URL.
  *
- * @author Esteban Gómez León
+ * @author StayHub Dev Team
  * @version 1.0
+ * @since 1.0
  */
-@Schema(description = "Data Transfer Object for user registration")
+@Schema(description = "Response body returned after registering a new StayHub user account.")
 public record UserSignupResponseDTO(
         @NotBlank(message = "Email is required")
         @Email(message = "Invalid email format")
@@ -42,7 +43,7 @@ public record UserSignupResponseDTO(
         String password,
 
         @NotNull(message = "Role is required")
-        @Schema(description = "The role or roles of the user", example = "GUEST, HOST")
+        @Schema(description = "The role or roles assigned to the user", example = "[\"GUEST\"]", allowableValues = {"GUEST", "HOST"})
         Set<Role> roles,
 
         @NotBlank(message = "Full name is required")

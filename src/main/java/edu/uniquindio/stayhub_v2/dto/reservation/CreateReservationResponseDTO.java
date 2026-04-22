@@ -37,10 +37,11 @@ import java.util.Currency;
  * @param paymentDeadline    The deadline (3 days from booking) by which the
  *                           deposit must be paid.
  *
- * @author Esteban Gómez León
+ * @author StayHub Dev Team
  * @version 1.1
+ * @since 1.0
  */
-@Schema(description = "Data Transfer Object representing the response for the creation of a reservation, including payment details.")
+@Schema(description = "Response body returned after creating a reservation, including stay dates, payment summary, and deposit instructions.")
 public record CreateReservationResponseDTO(
 
                 @NotNull @Schema(description = "Unique identifier of the reservation", example = "12345") Long id,
@@ -51,9 +52,9 @@ public record CreateReservationResponseDTO(
 
                 @NotNull @DecimalMin(value = "0.0", inclusive = false) @Schema(description = "Total price for the entire stay", example = "1000.00") BigDecimal totalPrice,
 
-                @NotNull @Schema(description = "Currency of the total price", example = "COP") Currency currency,
+                @NotNull @Schema(description = "Currency in which the total price and deposit are expressed", example = "COP") Currency currency,
 
-                @NotNull @Schema(description = "Current status of the reservation", example = "ACTIVE") ReservationStatus status,
+                @NotNull @Schema(description = "Current status of the reservation", example = "ACTIVE", allowableValues = {"ACTIVE", "CANCELLED", "COMPLETED"}) ReservationStatus status,
 
                 @NotNull @Schema(description = "ID of the booked accommodation", example = "1") Long accommodationId,
 
@@ -61,7 +62,7 @@ public record CreateReservationResponseDTO(
 
                 @NotNull @Schema(description = "ID of the guest who made the reservation", example = "678") Long userId,
 
-                @NotNull @DecimalMin(value = "0.0", inclusive = false) @Schema(description = "Required advance deposit (20% of total price). Must be paid within the payment deadline.", example = "200.00") BigDecimal depositAmount,
+                @NotNull @DecimalMin(value = "0.0", inclusive = false) @Schema(description = "Required advance deposit amount. Must be paid within the payment deadline.", example = "200.00") BigDecimal depositAmount,
 
                 @NotNull @Schema(description = "Bank account number where the deposit must be transferred", example = "3001234567890") String bankAccountNumber,
 
