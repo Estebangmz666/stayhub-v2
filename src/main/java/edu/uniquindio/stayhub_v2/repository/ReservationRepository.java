@@ -212,6 +212,22 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             @Param("endDate") LocalDateTime endDate
     );
 
+    @Query("""
+    SELECT COUNT(r) > 0 FROM Reservation r
+    WHERE r.accommodation.id = :accommodationId
+    AND r.id <> :reservationId
+    AND r.status = 'ACTIVE'
+    AND (
+        (r.startDate < :endDate AND r.endDate > :startDate)
+    )
+""")
+    boolean existsByAccommodationIdAndDateRangeExcludingReservationId(
+            @Param("accommodationId") Long accommodationId,
+            @Param("reservationId") Long reservationId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+
     /**
      * Finds all active reservations of a guest that still have a pending deposit payment.
      *
@@ -260,6 +276,14 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
 
     @Query("""
     SELECT r FROM Reservation r
+    WHERE r.depositPaid = false
+    AND r.status = 'ACTIVE'
+    AND r.paymentDeadline < :now
+""")
+    List<Reservation> findExpiredUnpaidReservations(@Param("now") LocalDateTime now);
+
+    @Query("""
+    SELECT r FROM Reservation r
     WHERE r.id = :reservationId
     AND (
         r.guest.id = :userId
@@ -272,27 +296,6 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     );
 
     Optional<Reservation> findById(@NonNull Long id);
-
-    Page<Reservation> findByGuestId(Long guestId, Pageable pageable);
-
-    Page<Reservation> findByAccommodationHostId(Long hostId, Pageable pageable);
-
-    @Query(
-            value = """
-        SELECT DISTINCT r FROM Reservation r
-        WHERE r.guest.id = :userId
-        OR r.accommodation.host.id = :userId
-    """,
-            countQuery = """
-        SELECT COUNT(DISTINCT r.id) FROM Reservation r
-        WHERE r.guest.id = :userId
-        OR r.accommodation.host.id = :userId
-    """
-    )
-    Page<Reservation> findByGuestIdOrAccommodationHostIdDistinct(
-            @Param("userId") Long userId,
-            Pageable pageable
-    );
 
     @Query("""
     SELECT new edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryProjectionDTO(

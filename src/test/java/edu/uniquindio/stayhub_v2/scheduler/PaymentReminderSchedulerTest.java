@@ -6,6 +6,7 @@ import edu.uniquindio.stayhub_v2.model.ReservationStatus;
 import edu.uniquindio.stayhub_v2.model.User;
 import edu.uniquindio.stayhub_v2.repository.ReservationRepository;
 import edu.uniquindio.stayhub_v2.service.EmailService;
+import edu.uniquindio.stayhub_v2.service.ReservationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,6 +40,9 @@ class PaymentReminderSchedulerTest {
 
     @Mock
     private EmailService emailService;
+
+    @Mock
+    private ReservationService reservationService;
 
     @InjectMocks
     private PaymentReminderScheduler scheduler;
@@ -133,5 +137,14 @@ class PaymentReminderSchedulerTest {
         verify(emailService, times(1)).sendEmailWithTemplate(
                 eq("second@mail.com"), any(), eq("payment-reminder"), any(Context.class)
         );
+    }
+
+    @Test
+    void cancelExpiredUnpaidReservations_DelegatesToReservationService() {
+        when(reservationService.cancelExpiredUnpaidReservations()).thenReturn(2);
+
+        scheduler.cancelExpiredUnpaidReservations();
+
+        verify(reservationService).cancelExpiredUnpaidReservations();
     }
 }

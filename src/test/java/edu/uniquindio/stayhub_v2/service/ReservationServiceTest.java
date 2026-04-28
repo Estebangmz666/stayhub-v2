@@ -5,9 +5,13 @@ import edu.uniquindio.stayhub_v2.dto.reservation.CreateReservationResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryProjectionDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.reservation.UpdateReservationRequestDTO;
+import edu.uniquindio.stayhub_v2.event.ReservationCancelledEvent;
 import edu.uniquindio.stayhub_v2.event.ReservationCreatedEvent;
 import edu.uniquindio.stayhub_v2.exception.AccommodationNotFoundException;
+import edu.uniquindio.stayhub_v2.exception.DepositNotPaidException;
 import edu.uniquindio.stayhub_v2.exception.ReservationNotFoundException;
+import edu.uniquindio.stayhub_v2.exception.ReservationPolicyViolationException;
 import edu.uniquindio.stayhub_v2.mapper.ReservationMapper;
 import edu.uniquindio.stayhub_v2.model.Accommodation;
 import edu.uniquindio.stayhub_v2.model.Role;
@@ -42,6 +46,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -228,6 +233,20 @@ class ReservationServiceTest {
         CreateReservationResponseDTO response = reservationService.createReservation(request);
 
         assertThat(response.paymentDeadline()).isBetween(before, after);
+    }
+
+    @Test
+    void createReservation_StartDateWithin72Hours_ThrowsPolicyViolationException() {
+        LocalDateTime start = LocalDateTime.now().plusHours(48);
+        LocalDateTime end = start.plusDays(2);
+        CreateReservationRequestDTO request = new CreateReservationRequestDTO(10L, start, end);
+
+        assertThatThrownBy(() -> reservationService.createReservation(request))
+                .isInstanceOf(ReservationPolicyViolationException.class)
+                .hasMessageContaining("72 hours");
+
+        verify(accommodationRepository, never()).findAvailableByIdWithWriteLock(any());
+        verify(reservationRepository, never()).save(any());
     }
 
     @Test
@@ -423,5 +442,135 @@ class ReservationServiceTest {
         assertThatThrownBy(() -> reservationService.getMyReservations(0, "invalid"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Invalid scope value");
+    }
+
+    @Test
+    void updateReservation_ValidDates_RecalculatesPriceAndKeepsDepositPaidState() {
+        savedReservation.setDepositPaid(true);
+        LocalDateTime newStart = LocalDateTime.now().plusDays(8);
+        LocalDateTime newEnd = LocalDateTime.now().plusDays(12);
+        UpdateReservationRequestDTO request = new UpdateReservationRequestDTO(newStart, newEnd);
+
+        when(userService.getCurrentUser()).thenReturn(guest);
+        when(reservationRepository.findAuthorizedById(100L, guest.getId()))
+                .thenReturn(Optional.of(savedReservation));
+        when(reservationRepository.existsByAccommodationIdAndDateRangeExcludingReservationId(
+                eq(accommodation.getId()), eq(100L), eq(newStart), eq(newEnd)))
+                .thenReturn(false);
+        when(reservationRepository.save(any(Reservation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(reservationMapper.toRetrieveDTO(any(Reservation.class))).thenReturn(retrieveDto());
+
+        RetrieveReservationResponseDTO response = reservationService.updateReservation(100L, request);
+
+        assertThat(response.id()).isEqualTo(100L);
+        assertThat(savedReservation.getStartDate()).isEqualTo(newStart);
+        assertThat(savedReservation.getEndDate()).isEqualTo(newEnd);
+        assertThat(savedReservation.getTotalPrice()).isEqualByComparingTo("800000");
+        assertThat(savedReservation.getDepositAmount()).isEqualByComparingTo("160000.00");
+        assertThat(savedReservation.getDepositPaid()).isTrue();
+    }
+
+    @Test
+    void updateReservation_Within72HoursAndDepositNotPaid_ThrowsDepositNotPaidException() {
+        savedReservation.setDepositPaid(false);
+        LocalDateTime newStart = LocalDateTime.now().plusHours(48);
+        LocalDateTime newEnd = newStart.plusDays(2);
+        UpdateReservationRequestDTO request = new UpdateReservationRequestDTO(newStart, newEnd);
+
+        when(userService.getCurrentUser()).thenReturn(guest);
+        when(reservationRepository.findAuthorizedById(100L, guest.getId()))
+                .thenReturn(Optional.of(savedReservation));
+
+        assertThatThrownBy(() -> reservationService.updateReservation(100L, request))
+                .isInstanceOf(DepositNotPaidException.class)
+                .hasMessageContaining("Deposit must be paid");
+
+        verify(reservationRepository, never())
+                .existsByAccommodationIdAndDateRangeExcludingReservationId(any(), any(), any(), any());
+        verify(reservationRepository, never()).save(any());
+    }
+
+    @Test
+    void updateReservation_NonActiveReservation_ThrowsPolicyViolationException() {
+        savedReservation.setStatus(ReservationStatus.CANCELLED);
+        UpdateReservationRequestDTO request = new UpdateReservationRequestDTO(
+                LocalDateTime.now().plusDays(5),
+                LocalDateTime.now().plusDays(7)
+        );
+
+        when(userService.getCurrentUser()).thenReturn(guest);
+        when(reservationRepository.findAuthorizedById(100L, guest.getId()))
+                .thenReturn(Optional.of(savedReservation));
+
+        assertThatThrownBy(() -> reservationService.updateReservation(100L, request))
+                .isInstanceOf(ReservationPolicyViolationException.class)
+                .hasMessageContaining("Only active reservations");
+
+        verify(reservationRepository, never()).save(any());
+    }
+
+    @Test
+    void cancelReservation_ValidActiveReservation_CancelsAndPublishesEvent() {
+        savedReservation.setStartDate(LocalDateTime.now().plusDays(5));
+
+        when(userService.getCurrentUser()).thenReturn(guest);
+        when(reservationRepository.findAuthorizedById(100L, guest.getId()))
+                .thenReturn(Optional.of(savedReservation));
+        when(reservationRepository.save(any(Reservation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(reservationMapper.toRetrieveDTO(any(Reservation.class))).thenReturn(retrieveDto());
+
+        RetrieveReservationResponseDTO response = reservationService.cancelReservation(100L);
+
+        assertThat(response.id()).isEqualTo(100L);
+        assertThat(savedReservation.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
+        verify(applicationEventPublisher).publishEvent(any(ReservationCancelledEvent.class));
+    }
+
+    @Test
+    void cancelReservation_Within48Hours_ThrowsPolicyViolationException() {
+        savedReservation.setStartDate(LocalDateTime.now().plusHours(24));
+
+        when(userService.getCurrentUser()).thenReturn(guest);
+        when(reservationRepository.findAuthorizedById(100L, guest.getId()))
+                .thenReturn(Optional.of(savedReservation));
+
+        assertThatThrownBy(() -> reservationService.cancelReservation(100L))
+                .isInstanceOf(ReservationPolicyViolationException.class)
+                .hasMessageContaining("48 hours");
+
+        verify(reservationRepository, never()).save(any());
+    }
+
+    @Test
+    void markDepositAsPaid_ActiveReservation_SetsDepositPaidTrue() {
+        savedReservation.setDepositPaid(false);
+
+        when(userService.getCurrentUser()).thenReturn(guest);
+        when(reservationRepository.findAuthorizedById(100L, guest.getId()))
+                .thenReturn(Optional.of(savedReservation));
+        when(reservationRepository.save(any(Reservation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(reservationMapper.toRetrieveDTO(any(Reservation.class))).thenReturn(retrieveDto());
+
+        reservationService.markDepositAsPaid(100L);
+
+        assertThat(savedReservation.getDepositPaid()).isTrue();
+    }
+
+    @Test
+    void cancelExpiredUnpaidReservations_CancelsAllExpiredUnpaidActiveReservations() {
+        Reservation expired = new Reservation();
+        expired.setId(300L);
+        expired.setStatus(ReservationStatus.ACTIVE);
+        expired.setDepositPaid(false);
+
+        when(reservationRepository.findExpiredUnpaidReservations(any()))
+                .thenReturn(List.of(expired));
+        when(reservationRepository.save(any(Reservation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        int cancelledCount = reservationService.cancelExpiredUnpaidReservations();
+
+        assertThat(cancelledCount).isEqualTo(1);
+        assertThat(expired.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
+        verify(applicationEventPublisher, times(1)).publishEvent(any(ReservationCancelledEvent.class));
     }
 }

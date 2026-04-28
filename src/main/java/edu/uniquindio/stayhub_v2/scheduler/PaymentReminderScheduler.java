@@ -3,6 +3,7 @@ package edu.uniquindio.stayhub_v2.scheduler;
 import edu.uniquindio.stayhub_v2.model.Reservation;
 import edu.uniquindio.stayhub_v2.repository.ReservationRepository;
 import edu.uniquindio.stayhub_v2.service.EmailService;
+import edu.uniquindio.stayhub_v2.service.ReservationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,6 +45,7 @@ public class PaymentReminderScheduler {
 
     private final ReservationRepository reservationRepository;
     private final EmailService emailService;
+    private final ReservationService reservationService;
 
     @Value("${stayhub.payment.bank-account}")
     private String bankAccountNumber;
@@ -92,6 +94,16 @@ public class PaymentReminderScheduler {
         });
 
         log.info("Payment reminder scheduler completed.");
+    }
+
+    @Scheduled(cron = "0 15 0 * * ?")
+    public void cancelExpiredUnpaidReservations() {
+        log.info("Running expired unpaid reservation cancellation scheduler.");
+
+        int cancelledReservations = reservationService.cancelExpiredUnpaidReservations();
+
+        log.info("Expired unpaid reservation cancellation scheduler completed. Cancelled reservations: {}",
+                cancelledReservations);
     }
 
     /**

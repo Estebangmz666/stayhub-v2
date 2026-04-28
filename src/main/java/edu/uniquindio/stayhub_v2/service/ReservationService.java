@@ -5,9 +5,13 @@ import edu.uniquindio.stayhub_v2.dto.reservation.CreateReservationResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryProjectionDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.reservation.UpdateReservationRequestDTO;
+import edu.uniquindio.stayhub_v2.event.ReservationCancelledEvent;
 import edu.uniquindio.stayhub_v2.event.ReservationCreatedEvent;
 import edu.uniquindio.stayhub_v2.exception.AccommodationNotFoundException;
+import edu.uniquindio.stayhub_v2.exception.DepositNotPaidException;
 import edu.uniquindio.stayhub_v2.exception.ReservationNotFoundException;
+import edu.uniquindio.stayhub_v2.exception.ReservationPolicyViolationException;
 import edu.uniquindio.stayhub_v2.mapper.ReservationMapper;
 import edu.uniquindio.stayhub_v2.model.*;
 import edu.uniquindio.stayhub_v2.repository.AccommodationRepository;
@@ -20,6 +24,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -28,6 +33,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 /**
  * Service class for managing reservation (booking) operations.
@@ -118,6 +124,9 @@ public class ReservationService {
 
     @Value("${stayhub.payment.deadline-days:3}")
     private int deadlineDays;
+
+    private static final int MINIMUM_BOOKING_ANTICIPATION_HOURS = 72;
+    private static final int MINIMUM_CANCELLATION_ANTICIPATION_HOURS = 48;
 
     /**
      * Creates a new reservation (booking) for accommodation.
@@ -213,6 +222,8 @@ public class ReservationService {
                 createReservationRequestDTO.startDate(),
                 createReservationRequestDTO.endDate());
 
+        validateMinimumBookingAnticipation(createReservationRequestDTO.startDate());
+
         // 1. Retrieve and lock the accommodation to serialize competing reservations.
         Accommodation accommodation = accommodationRepository
                 .findAvailableByIdWithWriteLock(createReservationRequestDTO.accommodationId())
@@ -243,27 +254,18 @@ public class ReservationService {
         log.debug("Guest user: {} (ID: {})", user.getEmail(), user.getId());
 
         // 4. Calculate number of nights and total price
-        long nights = ChronoUnit.DAYS.between(
-                createReservationRequestDTO.startDate().toLocalDate(),
-                createReservationRequestDTO.endDate().toLocalDate()
+        long nights = calculateNights(
+                createReservationRequestDTO.startDate(),
+                createReservationRequestDTO.endDate(),
+                accommodation.getId()
         );
-
-        if (nights <= 0) {
-            log.warn("Booking failed: Invalid stay duration ({} nights) for accommodation {}",
-                    nights, accommodation.getId());
-            throw new IllegalArgumentException("Reservation must be at least one night");
-        }
-
-        BigDecimal totalPrice = accommodation.getPricePerNight()
-                .multiply(BigDecimal.valueOf(nights));
+        BigDecimal totalPrice = calculateTotalPrice(accommodation, nights);
 
         log.debug("Calculated price: {} {} for {} nights",
                 totalPrice, accommodation.getCurrency(), nights);
 
         // 5. Calculate deposit (20%) and payment deadline
-        BigDecimal depositAmount = totalPrice
-                .multiply(BigDecimal.valueOf(depositPercentage))
-                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        BigDecimal depositAmount = calculateDepositAmount(totalPrice);
         LocalDateTime paymentDeadline = LocalDateTime.now().plusDays(deadlineDays);
         log.debug("Deposit amount: {} | Payment deadline: {}", depositAmount, paymentDeadline);
 
@@ -312,28 +314,6 @@ public class ReservationService {
 
     /*
      * Additional methods that could be added in the future:
-     *
-     * // Cancel a reservation
-     * @Transactional
-     * public void cancelReservation(Long reservationId, String requesterEmail) {
-     *     Reservation reservation = reservationRepository.findById(reservationId)
-     *             .orElseThrow(() -> new ReservationNotFoundException("Reservation not found"));
-     *
-     *     // Validate that requester is either guest or host
-     *     if (!reservation.getGuest().getEmail().equals(requesterEmail) &&
-     *         !reservation.getAccommodation().getHost().getEmail().equals(requesterEmail)) {
-     *         throw new UnauthorizedException("Not authorized to cancel this reservation");
-     *     }
-     *
-     *     // Validate cancellation policy (e.g., cannot cancel within 24h of check-in)
-     *     validateCancellationPolicy(reservation);
-     *
-     *     reservation.setStatus(ReservationStatus.CANCELLED);
-     *     reservationRepository.save(reservation);
-     *
-     *     // Publish cancellation event
-     *     applicationEventPublisher.publishEvent(new ReservationCancelledEvent(reservation));
-     * }
      *
      * // Get reservation by ID with authorization check
      * public ReservationResponseDTO getReservation(Long id, String requesterEmail) {
@@ -388,51 +368,121 @@ public class ReservationService {
      *     });
      * }
      *
-     * // Update reservation dates (if allowed by policy)
-     * @Transactional
-     * public ReservationResponseDTO updateReservationDates(
-     *         Long reservationId,
-     *         LocalDateTime newStartDate,
-     *         LocalDateTime newEndDate,
-     *         String requesterEmail) {
-     *
-     *     Reservation reservation = reservationRepository.findById(reservationId)
-     *             .orElseThrow(() -> new ReservationNotFoundException("Reservation not found"));
-     *
-     *     // Only guest can modify (and only if policy allows)
-     *     if (!reservation.getGuest().getEmail().equals(requesterEmail)) {
-     *         throw new UnauthorizedException("Only guest can modify reservation");
-     *     }
-     *
-     *     // Check if modification is allowed
-     *     validateModificationAllowed(reservation);
-     *
-     *     // Check new dates availability
-     *     boolean isOverlapping = reservationRepository.existsByAccommodationIdAndDateRangeExcludingId(
-     *             reservation.getAccommodation().getId(),
-     *             newStartDate, newEndDate, reservationId);
-     *
-     *     if (isOverlapping) {
-     *         throw new IllegalStateException("New dates are not available");
-     *     }
-     *
-     *     // Recalculate price
-     *     long nights = ChronoUnit.DAYS.between(newStartDate.toLocalDate(),
-     *                                            newEndDate.toLocalDate());
-     *     BigDecimal newTotalPrice = reservation.getAccommodation().getPricePerNight()
-     *             .multiply(BigDecimal.valueOf(nights));
-     *
-     *     reservation.setStartDate(newStartDate);
-     *     reservation.setEndDate(newEndDate);
-     *     reservation.setTotalPrice(newTotalPrice);
-     *
-     *     Reservation updated = reservationRepository.save(reservation);
-     *
-     *     applicationEventPublisher.publishEvent(new ReservationModifiedEvent(updated));
-     *
-     *     return reservationMapper.toDTO(updated);
-     * }
      */
+
+    @Transactional
+    public RetrieveReservationResponseDTO updateReservation(
+            Long reservationId,
+            UpdateReservationRequestDTO updateReservationRequestDTO) {
+
+        log.info("Updating reservation {} dates to {} - {}",
+                reservationId,
+                updateReservationRequestDTO.startDate(),
+                updateReservationRequestDTO.endDate());
+
+        User currentUser = userService.getCurrentUser();
+        Reservation reservation = getReservationForGuestManagement(reservationId, currentUser);
+
+        validateReservationIsActive(reservation);
+        validateDepositRequirementForDateChange(reservation, updateReservationRequestDTO.startDate());
+
+        Long accommodationId = reservation.getAccommodation().getId();
+        boolean isOverlapping = reservationRepository
+                .existsByAccommodationIdAndDateRangeExcludingReservationId(
+                        accommodationId,
+                        reservationId,
+                        updateReservationRequestDTO.startDate(),
+                        updateReservationRequestDTO.endDate()
+                );
+
+        if (isOverlapping) {
+            log.warn("Reservation update failed: accommodation {} is unavailable from {} to {}",
+                    accommodationId,
+                    updateReservationRequestDTO.startDate(),
+                    updateReservationRequestDTO.endDate());
+            throw new IllegalStateException(
+                    "Accommodation is already booked for the selected dates");
+        }
+
+        long nights = calculateNights(
+                updateReservationRequestDTO.startDate(),
+                updateReservationRequestDTO.endDate(),
+                accommodationId
+        );
+        BigDecimal totalPrice = calculateTotalPrice(reservation.getAccommodation(), nights);
+
+        reservation.setStartDate(updateReservationRequestDTO.startDate());
+        reservation.setEndDate(updateReservationRequestDTO.endDate());
+        reservation.setTotalPrice(totalPrice);
+        reservation.setDepositAmount(calculateDepositAmount(totalPrice));
+
+        Reservation updated = reservationRepository.save(reservation);
+        log.info("Reservation {} updated successfully", updated.getId());
+
+        return reservationMapper.toRetrieveDTO(updated);
+    }
+
+    @Transactional
+    public RetrieveReservationResponseDTO cancelReservation(Long reservationId) {
+
+        log.info("Cancelling reservation {}", reservationId);
+
+        User currentUser = userService.getCurrentUser();
+        Reservation reservation = getReservationForGuestManagement(reservationId, currentUser);
+
+        validateReservationIsActive(reservation);
+        validateCancellationPolicy(reservation);
+
+        reservation.setStatus(ReservationStatus.CANCELLED);
+
+        Reservation cancelled = reservationRepository.save(reservation);
+        applicationEventPublisher.publishEvent(new ReservationCancelledEvent(cancelled));
+
+        log.info("Reservation {} cancelled successfully", cancelled.getId());
+        return reservationMapper.toRetrieveDTO(cancelled);
+    }
+
+    @Transactional
+    public RetrieveReservationResponseDTO markDepositAsPaid(Long reservationId) {
+
+        log.info("Marking deposit as paid for reservation {}", reservationId);
+
+        User currentUser = userService.getCurrentUser();
+        Reservation reservation = reservationRepository.findAuthorizedById(
+                        reservationId,
+                        currentUser.getId()
+                )
+                .orElseThrow(() -> new ReservationNotFoundException(
+                        "Reservation with ID " + reservationId + " not found"
+                ));
+
+        validateReservationIsActive(reservation);
+
+        reservation.setDepositPaid(true);
+
+        Reservation updated = reservationRepository.save(reservation);
+        log.info("Deposit marked as paid for reservation {}", updated.getId());
+
+        return reservationMapper.toRetrieveDTO(updated);
+    }
+
+    @Transactional
+    public int cancelExpiredUnpaidReservations() {
+
+        LocalDateTime now = LocalDateTime.now();
+        List<Reservation> expiredReservations =
+                reservationRepository.findExpiredUnpaidReservations(now);
+
+        expiredReservations.forEach(reservation -> {
+            reservation.setStatus(ReservationStatus.CANCELLED);
+            reservationRepository.save(reservation);
+            applicationEventPublisher.publishEvent(new ReservationCancelledEvent(reservation));
+            log.info("Reservation {} cancelled because deposit deadline expired",
+                    reservation.getId());
+        });
+
+        return expiredReservations.size();
+    }
 
     /**
      * Retrieves the full detail of a single reservation by its ID.
@@ -551,5 +601,92 @@ public class ReservationService {
                 reservation.currency().getCurrencyCode(),
                 reservation.status()
         ));
+    }
+
+    private Reservation getReservationForGuestManagement(Long reservationId, User currentUser) {
+        Reservation reservation = reservationRepository.findAuthorizedById(
+                        reservationId,
+                        currentUser.getId()
+                )
+                .orElseThrow(() -> new ReservationNotFoundException(
+                        "Reservation with ID " + reservationId + " not found"
+                ));
+
+        if (!reservation.getGuest().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("Only the guest can manage this reservation");
+        }
+
+        return reservation;
+    }
+
+    private void validateReservationIsActive(Reservation reservation) {
+        if (reservation.getStatus() != ReservationStatus.ACTIVE) {
+            throw new ReservationPolicyViolationException(
+                    "Only active reservations can be modified or cancelled");
+        }
+    }
+
+    private void validateMinimumBookingAnticipation(LocalDateTime startDate) {
+        LocalDateTime minimumStartDate = LocalDateTime.now()
+                .plusHours(MINIMUM_BOOKING_ANTICIPATION_HOURS);
+
+        if (startDate.isBefore(minimumStartDate)) {
+            throw new ReservationPolicyViolationException(
+                    "Reservations must be created at least 72 hours before check-in");
+        }
+    }
+
+    private void validateDepositRequirementForDateChange(
+            Reservation reservation,
+            LocalDateTime newStartDate) {
+
+        LocalDateTime depositRequiredBefore = LocalDateTime.now()
+                .plusHours(MINIMUM_BOOKING_ANTICIPATION_HOURS);
+
+        if (newStartDate.isBefore(depositRequiredBefore)
+                && !Boolean.TRUE.equals(reservation.getDepositPaid())) {
+            throw new DepositNotPaidException(
+                    "Deposit must be paid before moving a reservation within 72 hours of check-in");
+        }
+    }
+
+    private void validateCancellationPolicy(Reservation reservation) {
+        LocalDateTime latestCancellationTime = reservation.getStartDate()
+                .minusHours(MINIMUM_CANCELLATION_ANTICIPATION_HOURS);
+
+        if (LocalDateTime.now().isAfter(latestCancellationTime)) {
+            throw new ReservationPolicyViolationException(
+                    "Reservations can only be cancelled at least 48 hours before check-in");
+        }
+    }
+
+    private long calculateNights(
+            LocalDateTime startDate,
+            LocalDateTime endDate,
+            Long accommodationId) {
+
+        long nights = ChronoUnit.DAYS.between(
+                startDate.toLocalDate(),
+                endDate.toLocalDate()
+        );
+
+        if (nights <= 0) {
+            log.warn("Reservation failed: Invalid stay duration ({} nights) for accommodation {}",
+                    nights, accommodationId);
+            throw new IllegalArgumentException("Reservation must be at least one night");
+        }
+
+        return nights;
+    }
+
+    private BigDecimal calculateTotalPrice(Accommodation accommodation, long nights) {
+        return accommodation.getPricePerNight()
+                .multiply(BigDecimal.valueOf(nights));
+    }
+
+    private BigDecimal calculateDepositAmount(BigDecimal totalPrice) {
+        return totalPrice
+                .multiply(BigDecimal.valueOf(depositPercentage))
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
     }
 }

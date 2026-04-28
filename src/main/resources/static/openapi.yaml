@@ -420,6 +420,168 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+    put:
+      tags:
+        - Bookings
+      summary: Update an active reservation date range
+      description: |
+        Updates the check-in and check-out dates of an active reservation.
+        Only the guest who owns the reservation can update it.
+
+        If the new check-in is within the next 72 hours, the deposit must
+        already be paid before the date change is accepted.
+      operationId: updateReservation
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: reservationId
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+          description: Reservation identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateReservationRequest'
+      responses:
+        '200':
+          description: Reservation updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetrieveReservationResponse'
+        '400':
+          description: Invalid request or reservation policy violation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized - valid JWT token required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Only the guest can update this reservation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Reservation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Dates unavailable or deposit not paid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v2/bookings/{reservationId}/cancel:
+    patch:
+      tags:
+        - Bookings
+      summary: Cancel an active reservation
+      description: |
+        Cancels an active reservation owned by the authenticated guest.
+        Cancellation is allowed only at least 48 hours before check-in.
+      operationId: cancelReservation
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: reservationId
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+          description: Reservation identifier
+      responses:
+        '200':
+          description: Reservation cancelled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetrieveReservationResponse'
+        '400':
+          description: Reservation cannot be cancelled by policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized - valid JWT token required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Only the guest can cancel this reservation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Reservation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v2/bookings/{reservationId}/deposit-paid:
+    patch:
+      tags:
+        - Bookings
+      summary: Mark reservation deposit as paid
+      description: Marks the advance deposit of an authorized active reservation as paid.
+      operationId: markReservationDepositAsPaid
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: reservationId
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+          description: Reservation identifier
+      responses:
+        '200':
+          description: Deposit marked as paid successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetrieveReservationResponse'
+        '400':
+          description: Reservation is not active
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized - valid JWT token required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Reservation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/v2/bookings/my-reservations:
     get:
       tags:
@@ -813,6 +975,24 @@ components:
           example: "2025-06-05T11:00:00"
       required:
         - accommodationId
+        - startDate
+        - endDate
+
+    UpdateReservationRequest:
+      type: object
+      description: Request body for updating the date range of an active reservation.
+      properties:
+        startDate:
+          type: string
+          format: date-time
+          description: New check-in date and time
+          example: "2025-06-03T15:00:00"
+        endDate:
+          type: string
+          format: date-time
+          description: New check-out date and time. Must be after startDate.
+          example: "2025-06-07T11:00:00"
+      required:
         - startDate
         - endDate
 

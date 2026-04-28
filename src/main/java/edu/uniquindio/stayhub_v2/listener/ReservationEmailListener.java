@@ -1,6 +1,7 @@
 package edu.uniquindio.stayhub_v2.listener;
 
 import edu.uniquindio.stayhub_v2.event.ReservationCreatedEvent;
+import edu.uniquindio.stayhub_v2.event.ReservationCancelledEvent;
 import edu.uniquindio.stayhub_v2.exception.EmailNotificationException;
 import edu.uniquindio.stayhub_v2.model.Accommodation;
 import edu.uniquindio.stayhub_v2.model.Reservation;
@@ -92,6 +93,29 @@ public class ReservationEmailListener {
         }
     }
 
+    @Async
+    @EventListener
+    public void handleReservationCancelled(ReservationCancelledEvent event) {
+        log.info("Processing cancellation email notification for reservation ID: {}",
+                event.reservation().getId());
+
+        try {
+            Reservation reservation = event.reservation();
+            User guest = reservation.getGuest();
+            Accommodation accommodation = reservation.getAccommodation();
+            User host = accommodation.getHost();
+
+            validateEmailData(guest, host, accommodation, reservation);
+            sendCancellationEmailToHostSafely(host, guest, accommodation, reservation);
+
+            log.info("Cancellation email notification completed for reservation ID: {}",
+                    reservation.getId());
+        } catch (Exception e) {
+            log.error("Critical error in cancellation email notification handler for reservation: {}. Error: {}",
+                    event.reservation().getId(), e.getMessage(), e);
+        }
+    }
+
     /**
      * Sends the confirmation email to the guest with comprehensive error handling.
      *
@@ -120,7 +144,7 @@ public class ReservationEmailListener {
         } catch (EmailNotificationException e) {
             log.error("Failed to send email to guest {} for reservation {}: {}",
                     guest.getEmail(), reservation.getId(), e.getMessage());
-            handleEmailFailure(guest, reservation, "guest confirmation", e);
+            handleEmailFailure(guest, reservation, "guest confirmation");
 
         } catch (Exception e) {
             log.error("Unexpected error sending email to guest {} for reservation {}: {}",
@@ -161,13 +185,47 @@ public class ReservationEmailListener {
         } catch (EmailNotificationException e) {
             log.error("Failed to send email to host {} for reservation {}: {}",
                     host.getEmail(), reservation.getId(), e.getMessage());
-            handleEmailFailure(host, reservation, "host notification", e);
+            handleEmailFailure(host, reservation, "host notification");
 
         } catch (Exception e) {
             log.error("Unexpected error sending email to host {} for reservation {}: {}",
                     host.getEmail(), reservation.getId(), e.getMessage(), e);
             throw new EmailNotificationException(
                     String.format("Unexpected error sending notification email to host %s",
+                            host.getEmail()), e);
+        }
+    }
+
+    private void sendCancellationEmailToHostSafely(
+            User host,
+            User guest,
+            Accommodation accommodation,
+            Reservation reservation) {
+
+        log.info("Attempting to send cancellation notification email to host: {}", host.getEmail());
+
+        try {
+            validateEmailRecipient(host);
+
+            Context context = buildHostEmailContext(host, guest, accommodation, reservation);
+
+            emailService.sendEmailWithTemplate(
+                    host.getEmail(),
+                    "Reserva cancelada en " + accommodation.getTitle(),
+                    "host-reservation-cancellation",
+                    context
+            );
+
+            log.info("Cancellation notification email sent successfully to host: {}", host.getEmail());
+        } catch (EmailNotificationException e) {
+            log.error("Failed to send cancellation email to host {} for reservation {}: {}",
+                    host.getEmail(), reservation.getId(), e.getMessage());
+            handleEmailFailure(host, reservation, "host cancellation notification");
+        } catch (Exception e) {
+            log.error("Unexpected error sending cancellation email to host {} for reservation {}: {}",
+                    host.getEmail(), reservation.getId(), e.getMessage(), e);
+            throw new EmailNotificationException(
+                    String.format("Unexpected error sending cancellation email to host %s",
                             host.getEmail()), e);
         }
     }
@@ -277,8 +335,7 @@ public class ReservationEmailListener {
     /**
      * Handles email sending failures with appropriate logging and fallback strategies.
      */
-    private void handleEmailFailure(User user, Reservation reservation, String emailType,
-                                    Exception error) {
+    private void handleEmailFailure(User user, Reservation reservation, String emailType) {
 
         log.warn("Email delivery failed for {} to user {} (reservation {}). " +
                         "This does not affect the reservation status.",
@@ -312,7 +369,7 @@ public class ReservationEmailListener {
             return currencyFormat.format(price);
         } catch (Exception e) {
             log.warn("Error formatting price: {}", e.getMessage());
-            return "$" + price.toString();
+            return "$" + price;
         }
     }
 }

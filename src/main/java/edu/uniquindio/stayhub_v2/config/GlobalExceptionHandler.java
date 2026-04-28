@@ -182,6 +182,25 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(DepositNotPaidException.class)
+    public ResponseEntity<Error> handleDepositNotPaidException(DepositNotPaidException e) {
+        log.warn("Deposit payment required: {}", e.getMessage());
+        return new ResponseEntity<>(
+                new Error(e.getMessage(), HttpStatus.CONFLICT.value()),
+                HttpStatus.CONFLICT
+        );
+    }
+
+    @ExceptionHandler(ReservationPolicyViolationException.class)
+    public ResponseEntity<Error> handleReservationPolicyViolationException(
+            ReservationPolicyViolationException e) {
+        log.warn("Reservation policy violation: {}", e.getMessage());
+        return new ResponseEntity<>(
+                new Error(e.getMessage(), HttpStatus.BAD_REQUEST.value()),
+                HttpStatus.BAD_REQUEST
+        );
+    }
+
     /**
      * Handles invalid argument exceptions.
      *

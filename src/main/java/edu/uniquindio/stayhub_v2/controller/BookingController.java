@@ -5,6 +5,7 @@ import edu.uniquindio.stayhub_v2.dto.reservation.CreateReservationRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.CreateReservationResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.reservation.UpdateReservationRequestDTO;
 import edu.uniquindio.stayhub_v2.service.ReservationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -187,6 +188,72 @@ public class BookingController {
         log.info("GET /bookings/my-reservations?page={}&scope={} - retrieving reservations list",
                 page, scope);
         Page<RetrieveReservationSummaryResponseDTO> response = reservationService.getMyReservations(page, scope);
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(
+            summary = "Update an active reservation date range",
+            description = "Allows the guest who owns an active reservation to update its check-in and check-out dates. " +
+                    "If the new check-in is within 72 hours, the reservation deposit must already be paid."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Reservation updated successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid request or reservation policy violation"),
+            @ApiResponse(responseCode = "401", description = "User not authenticated"),
+            @ApiResponse(responseCode = "403", description = "Only the guest can update the reservation"),
+            @ApiResponse(responseCode = "404", description = "Reservation not found"),
+            @ApiResponse(responseCode = "409", description = "Dates unavailable or deposit not paid")
+    })
+    @PutMapping("/{reservationId}")
+    public ResponseEntity<RetrieveReservationResponseDTO> updateReservation(
+            @PathVariable @Positive(message = "ID must be positive") Long reservationId,
+            @Valid @RequestBody UpdateReservationRequestDTO updateReservationRequestDTO) {
+
+        log.info("PUT /bookings/{} - updating reservation dates", reservationId);
+        RetrieveReservationResponseDTO response = reservationService.updateReservation(
+                reservationId,
+                updateReservationRequestDTO
+        );
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(
+            summary = "Cancel an active reservation",
+            description = "Cancels an active reservation owned by the authenticated guest. " +
+                    "Cancellation is allowed only at least 48 hours before check-in."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Reservation cancelled successfully"),
+            @ApiResponse(responseCode = "400", description = "Reservation cannot be cancelled by policy"),
+            @ApiResponse(responseCode = "401", description = "User not authenticated"),
+            @ApiResponse(responseCode = "403", description = "Only the guest can cancel the reservation"),
+            @ApiResponse(responseCode = "404", description = "Reservation not found")
+    })
+    @PatchMapping("/{reservationId}/cancel")
+    public ResponseEntity<RetrieveReservationResponseDTO> cancelReservation(
+            @PathVariable @Positive(message = "ID must be positive") Long reservationId) {
+
+        log.info("PATCH /bookings/{}/cancel - cancelling reservation", reservationId);
+        RetrieveReservationResponseDTO response = reservationService.cancelReservation(reservationId);
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(
+            summary = "Mark reservation deposit as paid",
+            description = "Marks the advance deposit of an authorized reservation as paid."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Deposit marked as paid successfully"),
+            @ApiResponse(responseCode = "400", description = "Reservation is not active"),
+            @ApiResponse(responseCode = "401", description = "User not authenticated"),
+            @ApiResponse(responseCode = "404", description = "Reservation not found")
+    })
+    @PatchMapping("/{reservationId}/deposit-paid")
+    public ResponseEntity<RetrieveReservationResponseDTO> markDepositAsPaid(
+            @PathVariable @Positive(message = "ID must be positive") Long reservationId) {
+
+        log.info("PATCH /bookings/{}/deposit-paid - marking deposit as paid", reservationId);
+        RetrieveReservationResponseDTO response = reservationService.markDepositAsPaid(reservationId);
         return ResponseEntity.ok(response);
     }
 }
