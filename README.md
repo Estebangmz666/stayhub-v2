@@ -1,6 +1,16 @@
-# StayHub V2
+<h1 align="center">StayHub V2</h1>
 
-Backend REST API for managing users, accommodations, reservations, reviews, deposit reminders, and guest-host interactions.
+<p align="center">Backend REST API for managing users, accommodations, reservations, reviews, deposit reminders, and guest-host interactions.</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Java-21-orange" alt="Java 21">
+  <img src="https://img.shields.io/badge/Spring%20Boot-4.0.4-6DB33F" alt="Spring Boot 4.0.4">
+  <img src="https://img.shields.io/badge/PostgreSQL-Database-336791" alt="PostgreSQL">
+  <img src="https://img.shields.io/badge/OpenAPI-springdoc%203.0.2-blue" alt="OpenAPI">
+  <img src="https://img.shields.io/badge/MapStruct-1.6.3-yellow" alt="MapStruct">
+  <img src="https://img.shields.io/badge/JWT-jjwt%200.13.0-red" alt="JWT">
+  <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License">
+</p>
 
 ## Overview
 
@@ -326,14 +336,15 @@ git push origin feature/your-feature-name
 
 ## License
 
-```text
-GNU GPL V3.0 License
-```
+`GNU GPL V3.0 License`
 
 ## Authors
 
-- Esteban Gomez Leon
-- Juan Pablo Galeano Correa
+- Esteban Gómez Leon
+- Juan Pablo Galeano
+- Daniel Garcia
+- Walter Granada
+- Valentina Gonzalez
 
 ---
 
