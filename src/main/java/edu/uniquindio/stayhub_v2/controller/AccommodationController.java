@@ -2,6 +2,8 @@ package edu.uniquindio.stayhub_v2.controller;
 
 import edu.uniquindio.stayhub_v2.dto.accommodation.AccommodationGetByIdResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.accommodation.AccommodationSearchByCityResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.accommodation.CreateAccommodationRequestDTO;
+import edu.uniquindio.stayhub_v2.dto.accommodation.CreateAccommodationResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.auth.MessageResponseDTO;
 import edu.uniquindio.stayhub_v2.service.AccommodationService;
 import edu.uniquindio.stayhub_v2.service.JWTService;
@@ -13,6 +15,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -22,6 +25,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -42,12 +47,42 @@ public class AccommodationController {
     private final JWTService jwtService;
 
     @Operation(
+            summary = "Create accommodation",
+            description = "Creates a new accommodation listing owned by the authenticated host. The backend assigns the host automatically from the authenticated user and initializes the listing as available and not deleted."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "201",
+                    description = "Accommodation created successfully",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = CreateAccommodationResponseDTO.class),
+                            examples = @ExampleObject(
+                                    name = "Accommodation created",
+                                    value = "{\\\"id\\\":15,\\\"hostId\\\":8,\\\"hostEmail\\\":\\\"host@example.com\\\",\\\"title\\\":\\\"Cabana familiar con vista al valle\\\",\\\"description\\\":\\\"Cabana campestre equipada para familias, con cocina integral, zona BBQ y vista panoramica al valle.\\\",\\\"capacity\\\":6,\\\"currency\\\":\\\"COP\\\",\\\"pricePerNight\\\":180000.00,\\\"mainImage\\\":\\\"https://images.example.com/accommodations/main/cabana-valle.jpg\\\",\\\"longitude\\\":-75.6811,\\\"latitude\\\":4.5339,\\\"locationDescription\\\":\\\"A 10 minutos del Parque del Cafe, sobre via principal pavimentada.\\\",\\\"city\\\":\\\"Armenia\\\",\\\"images\\\":[\\\"https://images.example.com/accommodations/gallery/cabana-valle-sala.jpg\\\",\\\"https://images.example.com/accommodations/gallery/cabana-valle-habitacion.jpg\\\"],\\\"available\\\":true,\\\"createdAt\\\":\\\"2026-04-28T20:45:00\\\",\\\"updatedAt\\\":\\\"2026-04-28T20:45:00\\\"}"
+                            )
+                    )
+            ),
+            @ApiResponse(responseCode = "400", description = "Validation error or malformed request body"),
+            @ApiResponse(responseCode = "403", description = "Authenticated user is not allowed to create accommodations"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized, valid JWT token required")
+    })
+    @PostMapping
+    public ResponseEntity<CreateAccommodationResponseDTO> createAccommodation(
+            @Valid @RequestBody CreateAccommodationRequestDTO requestDTO) {
+        log.info("Creating accommodation with title '{}'", requestDTO.title());
+        CreateAccommodationResponseDTO response = accommodationService.createAccommodation(requestDTO);
+        return new ResponseEntity<>(response, HttpStatus.CREATED);
+    }
+
+    @Operation(
             summary = "Search accommodations by city",
             description = "Returns active and available rural houses matching the requested city."
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Accommodations retrieved successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid city, page or size parameter")
+            @ApiResponse(responseCode = "400", description = "Invalid city, page or size parameter"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized, valid JWT token required")
     })
     @GetMapping
     public ResponseEntity<Page<AccommodationSearchByCityResponseDTO>> searchAccommodationsByCity(
@@ -84,6 +119,18 @@ public class AccommodationController {
                                 value = "{\\\"host\\\": {\\\"id\\\": 1, \\\"name\\\": \\\"Carlos Ramírez\\\", \\\"email\\\": \\\"carlos.ramirez@email.com\\\"}, \\\"title\\\": \\\"Acogedor apartamento en el centro histórico\\\", \\\"description\\\": \\\"Hermoso apartamento completamente amoblado con vista a la plaza principal.\\\", \\\"capacity\\\": 3, \\\"pricePerNight\\\": 120000.00, \\\"mainImage\\\": \\\"https://images.example.com/accommodations/main/apt-centro-001.jpg\\\", \\\"locationDescription\\\": \\\"A dos cuadras del parque principal, cerca de restaurantes y tiendas\\\", \\\"city\\\": \\\"Armenia\\\", \\\"images\\\": [\\\"https://images.example.com/accommodations/gallery/apt-centro-001-sala.jpg\\\", \\\"https://images.example.com/accommodations/gallery/apt-centro-001-cocina.jpg\\\", \\\"https://images.example.com/accommodations/gallery/apt-centro-001-habitacion.jpg\\\"], \\\"available\\\": true}"
                         )
                 )
+            ),
+            @ApiResponse(responseCode = "401", description = "Unauthorized, valid JWT token required",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class)
+                    )
+            ),
+            @ApiResponse(responseCode = "404", description = "Accommodation not found",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class)
+                    )
             )
     })
     @GetMapping("/{id}")
@@ -103,6 +150,12 @@ public class AccommodationController {
                             schema = @Schema(implementation = MessageResponseDTO.class),
                             examples = @ExampleObject(
                                     value = "{\\\"message\\\": \\\"Alojamiento dado de baja con éxito.\\\"}")
+                    )
+            ),
+            @ApiResponse(responseCode = "401", description = "Unauthorized, valid JWT token required",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class)
                     )
             ),
             @ApiResponse(responseCode = "400", description = "Active future reservations exist",

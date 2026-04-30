@@ -1,16 +1,6 @@
 package edu.uniquindio.stayhub_v2.model;
 
-import jakarta.persistence.CollectionTable;
-import jakarta.persistence.Column;
-import jakarta.persistence.ElementCollection;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Index;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -58,7 +48,7 @@ import java.util.List;
  * remains in the database but should be filtered out from all user-facing queries.
  * Use the {@code available} flag to temporarily hide listings without deleting them.</p>
  *
- * @author Esteban Gómez León
+ * @author Stayhub Dev Team
  * @version 1.0
  * @since 1.0
  * @see Auditable
@@ -155,11 +145,14 @@ public class Accommodation extends Auditable {
     private String mainImage;
 
     /**
-     * A list of comments made about this accommodation.
-     * This is a one-to-many relationship with the Comment entity.
+     * List of reviews written by guests about this accommodation.
+     *
+     * <p>This bidirectional relationship allows the platform to expose
+     * ratings, written feedback, and host responses associated with a
+     * completed stay at this accommodation.</p>
      */
-//    @OneToMany(mappedBy = "accommodation")
-//    private List<Comment> comments;
+    @OneToMany(mappedBy = "accommodation")
+    private List<Review> reviews;
 
     /**
      * The longitude coordinate of the accommodation's location.
@@ -186,7 +179,7 @@ public class Accommodation extends Auditable {
      *
      * <p>Describes the neighborhood, nearby landmarks, transportation options,
      * and other contextual information that helps guests understand the area.
-     * Example: "Located in the historic district, 5 min walk to Central Park."</p>
+     * Example: "Located in the historic district, 5-min walk to Central Park."</p>
      */
     @Column(name = "location_description", nullable = false)
     private String locationDescription;

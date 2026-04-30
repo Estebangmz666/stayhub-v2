@@ -83,6 +83,14 @@ public class BookingController {
                     )
             ),
             @ApiResponse(
+                    responseCode = "401",
+                    description = "User not authenticated",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = Error.class)
+                    )
+            ),
+            @ApiResponse(
                     responseCode = "404",
                     description = "Accommodation not found",
                     content = @Content(
@@ -246,6 +254,7 @@ public class BookingController {
             @ApiResponse(responseCode = "200", description = "Deposit marked as paid successfully"),
             @ApiResponse(responseCode = "400", description = "Reservation is not active"),
             @ApiResponse(responseCode = "401", description = "User not authenticated"),
+            @ApiResponse(responseCode = "403", description = "Only the guest can mark the deposit as paid"),
             @ApiResponse(responseCode = "404", description = "Reservation not found")
     })
     @PatchMapping("/{reservationId}/deposit-paid")

@@ -111,10 +111,9 @@ public class SecurityConfig {
      *
      * @param http The HttpSecurity instance to configure
      * @return The built SecurityFilterChain
-     * @throws Exception If an error occurs during configuration
      */
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) {
         http
                 // Enable CORS with custom configuration
                 .cors(Customizer.withDefaults())
@@ -137,7 +136,10 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**",
-                                "/openapi.yaml"
+                                "/openapi.yaml",
+                                "/actuator",
+                                "/actuator/**"
+
                         ).permitAll()
 
                         // Public access to authentication endpoints

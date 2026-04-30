@@ -1,17 +1,29 @@
 openapi: 3.0.3
 info:
-  title: StayHub v2 API
+  title: StayHub V2 API
   version: 1.0.0
-  description: OpenAPI spec generated from the current implemented controllers in StayHub v2.
+  description: Static OpenAPI contract aligned with the currently implemented StayHub V2 controllers.
 servers:
   - url: http://localhost:8080
-    description: Local server
+    description: Local development server
+tags:
+  - name: Users
+    description: Authentication and account management endpoints.
+  - name: Accommodations
+    description: Accommodation creation, search, retrieval and soft delete endpoints.
+  - name: Bookings
+    description: Reservation creation and reservation management endpoints.
+  - name: Reviews
+    description: Guest review creation, review listing and host response endpoints.
+  - name: Notifications
+    description: In-app notifications for pending reservation deposits.
 paths:
   /api/v2/users/auth/signup:
     post:
       tags:
         - Users
       summary: Register a new user
+      description: Creates a new StayHub user account with one or more roles.
       operationId: signupUser
       requestBody:
         required: true
@@ -32,11 +44,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
   /api/v2/users/auth/login:
     post:
       tags:
         - Users
       summary: Login user
+      description: Authenticates a user and returns a JWT access token.
       operationId: loginUser
       requestBody:
         required: true
@@ -63,152 +77,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  /api/v2/accommodations:
-    get:
-      tags:
-        - Accommodations
-      summary: Search accommodations by city
-      operationId: searchAccommodationsByCity
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: query
-          name: city
-          required: true
-          schema:
-            type: string
-            minLength: 1
-            example: Armenia
-          description: City name to search. Examples include Armenia, Medellin and Bogota.
-        - in: query
-          name: page
-          required: false
-          schema:
-            type: integer
-            minimum: 0
-            default: 0
-          description: Zero-based page number
-        - in: query
-          name: size
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 50
-            default: 10
-          description: Page size
-      responses:
-        '200':
-          description: Accommodations retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  content:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AccommodationSearchByCityResponse'
-                  pageable:
-                    type: object
-                  totalElements:
-                    type: integer
-                    format: int64
-                  totalPages:
-                    type: integer
-                  size:
-                    type: integer
-                  number:
-                    type: integer
-                  numberOfElements:
-                    type: integer
-                  first:
-                    type: boolean
-                  last:
-                    type: boolean
-                  empty:
-                    type: boolean
-        '400':
-          description: Invalid city, page or size parameter
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-  /api/v2/accommodations/{id}:
-    get:
-      tags:
-        - Accommodations
-      summary: Get accommodation by id
-      operationId: getAccommodationById
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: integer
-            format: int64
-          description: Accommodation id
-      responses:
-        '200':
-          description: Accommodation retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AccommodationGetByIdResponse'
-        '404':
-          description: Accommodation not found
-          content:
-            application/json:
-                $ref: '#/components/schemas/Error'
-    delete:
-      tags:
-        - Accommodations
-      summary: Deactivate accommodation
-      description: Soft deletes an accommodation if it has no future active reservations, validating if user is the owner.
-      operationId: deactivateAccommodation
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: integer
-            format: int64
-          description: Accommodation id
-      responses:
-        '200':
-          description: Accommodation deactivated successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MessageResponse'
-        '400':
-          description: Active future reservations exist
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Unauthorized action, user is not the owner
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Accommodation not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+
   /api/v2/users/auth/forgot-password:
     post:
       tags:
         - Users
       summary: Forgot password
-      description: Generates a recovery code and sends it via email
+      description: Generates a recovery code and sends it to the user's email.
       operationId: forgotPassword
       requestBody:
         required: true
@@ -229,12 +104,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
   /api/v2/users/auth/reset-password:
     post:
       tags:
         - Users
       summary: Reset password
-      description: Resets user password using a recovery code
+      description: Resets the user's password using a recovery code.
       operationId: resetPassword
       requestBody:
         required: true
@@ -255,12 +131,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
   /api/v2/users/auth/change-password:
     put:
       tags:
         - Users
       summary: Change password
-      description: Changes user's password requiring the current password
+      description: Changes the password of the authenticated user.
       operationId: changePassword
       security:
         - bearerAuth: []
@@ -278,35 +155,220 @@ paths:
               schema:
                 $ref: '#/components/schemas/MessageResponse'
         '400':
-          description: Validation or rules error
+          description: Validation or business rules error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '401':
-          description: Invalid current password
+          description: Invalid current password or missing token
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  # ─────────────────────────────────────────────
-  # BOOKINGS — updated with payment fields (v1.1)
-  # ─────────────────────────────────────────────
+  /api/v2/accommodations:
+    post:
+      tags:
+        - Accommodations
+      summary: Create accommodation
+      description: |
+        Creates a new accommodation listing owned by the authenticated host.
+
+        The backend derives the host from the authenticated JWT user and forces:
+        - `available = true`
+        - `deleted = false`
+      operationId: createAccommodation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccommodationRequest'
+      responses:
+        '201':
+          description: Accommodation created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateAccommodationResponse'
+        '400':
+          description: Validation error or malformed request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized, valid JWT token required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated user is not allowed to create accommodations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      tags:
+        - Accommodations
+      summary: Search accommodations by city
+      description: Returns active and available accommodations matching the requested city.
+      operationId: searchAccommodationsByCity
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: city
+          required: true
+          description: City name used to filter accommodations.
+          schema:
+            type: string
+            minLength: 1
+            example: Armenia
+        - in: query
+          name: page
+          required: false
+          description: Zero-based page number.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - in: query
+          name: size
+          required: false
+          description: Page size.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        '200':
+          description: Accommodations retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccommodationSearchByCityPage'
+        '400':
+          description: Invalid city, page or size parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized, valid JWT token required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v2/accommodations/{id}:
+    get:
+      tags:
+        - Accommodations
+      summary: Get accommodation by ID
+      description: |
+        Returns the accommodation detail for an active, non-deleted accommodation.
+
+        Note:
+        The current response model exposes the host through an entity-backed nested object,
+        so the documented `host` schema mirrors the actual serialized structure in the current codebase.
+      operationId: getAccommodation
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: Accommodation identifier.
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+      responses:
+        '200':
+          description: Accommodation retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccommodationGetByIdResponse'
+        '401':
+          description: Unauthorized, valid JWT token required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Accommodation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+        - Accommodations
+      summary: Deactivate accommodation
+      description: Soft deletes an accommodation if it has no future active reservations and the authenticated user is its host owner.
+      operationId: deactivateAccommodation
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: Accommodation identifier.
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+      responses:
+        '200':
+          description: Accommodation deactivated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Active future reservations exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized, valid JWT token required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated user is not the owner of the accommodation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Accommodation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/v2/bookings/book:
     post:
       tags:
         - Bookings
       summary: Create a new accommodation reservation
       description: |
-        Creates a new reservation for an accommodation.
+        Creates a reservation for an accommodation.
 
-        **Payment notice (v1.1):** Upon successful creation the response includes:
-        - `depositAmount`: the 20% advance deposit the guest must pay.
-        - `bankAccountNumber`: the account where the transfer should be made.
-        - `paymentDeadline`: 3 days from booking. The guest must pay before this date.
-
-        The frontend should display a modal with these details immediately after booking.
+        Business notes:
+        - reservations must be created at least 72 hours before check-in,
+        - overlapping active reservations are rejected,
+        - the response includes the deposit amount, bank account number and payment deadline.
       operationId: bookAccommodation
       security:
         - bearerAuth: []
@@ -316,40 +378,21 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateReservationRequest'
-            example:
-              accommodationId: 1
-              startDate: "2025-06-01T15:00:00"
-              endDate: "2025-06-05T11:00:00"
       responses:
         '201':
-          description: |
-            Reservation successfully created.
-            The response includes payment details for the mandatory 20% advance deposit.
+          description: Reservation successfully created
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CreateReservationResponse'
-              example:
-                id: 12345
-                startDate: "2025-06-01T15:00:00"
-                endDate: "2025-06-05T11:00:00"
-                totalPrice: 1000.00
-                currency: "COP"
-                status: "ACTIVE"
-                accommodationId: 1
-                accommodationTitle: "Cabaña en el Quindío"
-                userId: 678
-                depositAmount: 200.00
-                bankAccountNumber: "3001234567890"
-                paymentDeadline: "2025-04-18T09:00:00"
         '400':
-          description: Invalid request — validation failed
+          description: Invalid request or reservation policy violation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '401':
-          description: Unauthorized — valid JWT token required
+          description: User not authenticated
           content:
             application/json:
               schema:
@@ -361,7 +404,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '409':
-          description: Conflict — accommodation not available for selected dates
+          description: Accommodation not available for selected dates
           content:
             application/json:
               schema:
@@ -378,10 +421,7 @@ paths:
       tags:
         - Bookings
       summary: Get reservation detail by ID
-      description: |
-        Returns full reservation detail.
-        For security reasons, returns 404 both when the reservation does not exist
-        and when the authenticated user has no access to it.
+      description: Returns the full detail of a reservation for the guest owner or accommodation host.
       operationId: getReservationById
       security:
         - bearerAuth: []
@@ -389,11 +429,11 @@ paths:
         - in: path
           name: reservationId
           required: true
+          description: Reservation identifier.
           schema:
             type: integer
             format: int64
             minimum: 1
-          description: Reservation identifier
       responses:
         '200':
           description: Reservation retrieved successfully
@@ -408,7 +448,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '401':
-          description: Unauthorized - valid JWT token required
+          description: User not authenticated
           content:
             application/json:
               schema:
@@ -419,17 +459,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-
     put:
       tags:
         - Bookings
       summary: Update an active reservation date range
       description: |
-        Updates the check-in and check-out dates of an active reservation.
-        Only the guest who owns the reservation can update it.
+        Updates the check-in and check-out dates of an active reservation owned by the authenticated guest.
 
-        If the new check-in is within the next 72 hours, the deposit must
-        already be paid before the date change is accepted.
+        If the new check-in is within the next 72 hours, the deposit must already be paid.
       operationId: updateReservation
       security:
         - bearerAuth: []
@@ -437,11 +474,11 @@ paths:
         - in: path
           name: reservationId
           required: true
+          description: Reservation identifier.
           schema:
             type: integer
             format: int64
             minimum: 1
-          description: Reservation identifier
       requestBody:
         required: true
         content:
@@ -462,13 +499,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '401':
-          description: Unauthorized - valid JWT token required
+          description: User not authenticated
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '403':
-          description: Only the guest can update this reservation
+          description: Only the guest can update the reservation
           content:
             application/json:
               schema:
@@ -491,9 +528,7 @@ paths:
       tags:
         - Bookings
       summary: Cancel an active reservation
-      description: |
-        Cancels an active reservation owned by the authenticated guest.
-        Cancellation is allowed only at least 48 hours before check-in.
+      description: Cancels an active reservation owned by the authenticated guest. Cancellation is allowed only at least 48 hours before check-in.
       operationId: cancelReservation
       security:
         - bearerAuth: []
@@ -501,11 +536,11 @@ paths:
         - in: path
           name: reservationId
           required: true
+          description: Reservation identifier.
           schema:
             type: integer
             format: int64
             minimum: 1
-          description: Reservation identifier
       responses:
         '200':
           description: Reservation cancelled successfully
@@ -520,13 +555,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '401':
-          description: Unauthorized - valid JWT token required
+          description: User not authenticated
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '403':
-          description: Only the guest can cancel this reservation
+          description: Only the guest can cancel the reservation
           content:
             application/json:
               schema:
@@ -543,19 +578,19 @@ paths:
       tags:
         - Bookings
       summary: Mark reservation deposit as paid
-      description: Marks the advance deposit of an authorized active reservation as paid.
-      operationId: markReservationDepositAsPaid
+      description: Marks the advance deposit as paid for an active reservation owned by the authenticated guest.
+      operationId: markDepositAsPaid
       security:
         - bearerAuth: []
       parameters:
         - in: path
           name: reservationId
           required: true
+          description: Reservation identifier.
           schema:
             type: integer
             format: int64
             minimum: 1
-          description: Reservation identifier
       responses:
         '200':
           description: Deposit marked as paid successfully
@@ -570,7 +605,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '401':
-          description: Unauthorized - valid JWT token required
+          description: User not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Only the guest can mark the deposit as paid
           content:
             application/json:
               schema:
@@ -589,9 +630,10 @@ paths:
       summary: Get paginated list of my reservations
       description: |
         Returns paginated reservations for the authenticated user.
+
         If `scope` is omitted, legacy behavior is preserved:
-        - HOST users: host reservations
-        - non-HOST users: guest reservations
+        - users with role `HOST` receive host reservations,
+        - users without role `HOST` receive guest reservations.
       operationId: getMyReservations
       security:
         - bearerAuth: []
@@ -599,49 +641,28 @@ paths:
         - in: query
           name: page
           required: false
+          description: Zero-based page number.
           schema:
             type: integer
             minimum: 0
             default: 0
-          description: Zero-based page number
         - in: query
           name: scope
           required: false
+          description: Optional reservation filter scope.
           schema:
             type: string
-            enum: [host, guest, all]
-          description: Optional filter scope
+            enum:
+              - host
+              - guest
+              - all
       responses:
         '200':
           description: Reservations retrieved successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  content:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/RetrieveReservationSummaryResponse'
-                  pageable:
-                    type: object
-                  totalElements:
-                    type: integer
-                    format: int64
-                  totalPages:
-                    type: integer
-                  size:
-                    type: integer
-                  number:
-                    type: integer
-                  numberOfElements:
-                    type: integer
-                  first:
-                    type: boolean
-                  last:
-                    type: boolean
-                  empty:
-                    type: boolean
+                $ref: '#/components/schemas/RetrieveReservationSummaryPage'
         '400':
           description: Invalid page or scope parameter
           content:
@@ -649,50 +670,182 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '401':
-          description: Unauthorized - valid JWT token required
+          description: User not authenticated
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  # ─────────────────────────────────────────────
-  # NOTIFICATIONS — new endpoint (v1.1)
-  # ─────────────────────────────────────────────
+  /api/v2/accommodations/{accommodationId}/reviews:
+    post:
+      tags:
+        - Reviews
+      summary: Create a review for a completed stay
+      description: Allows the guest who completed a reservation to create a single review for the related accommodation.
+      operationId: createReview
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: accommodationId
+          required: true
+          description: Accommodation identifier.
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReviewRequest'
+      responses:
+        '201':
+          description: Review created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewResponse'
+        '400':
+          description: Review policy violation or invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized, valid JWT token required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Only the guest owner can create the review
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Accommodation or reservation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      tags:
+        - Reviews
+      summary: List reviews for an accommodation
+      description: Returns all reviews registered for the specified accommodation ordered from newest to oldest.
+      operationId: getAccommodationReviews
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: accommodationId
+          required: true
+          description: Accommodation identifier.
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+      responses:
+        '200':
+          description: Reviews retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReviewResponse'
+        '401':
+          description: Unauthorized, valid JWT token required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Accommodation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v2/reviews/{reviewId}/response:
+    post:
+      tags:
+        - Reviews
+      summary: Answer a guest review
+      description: Allows the host owner of the accommodation to respond once to a guest review.
+      operationId: respondToReview
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: reviewId
+          required: true
+          description: Review identifier.
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RespondReviewRequest'
+      responses:
+        '200':
+          description: Review answered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewResponse'
+        '400':
+          description: Review policy violation or invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized, valid JWT token required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Only the host owner can answer the review
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Review not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/v2/notifications/payment-pending:
     get:
       tags:
         - Notifications
       summary: Get pending payment notifications
-      description: |
-        Returns all active reservations for the **authenticated guest** that have a pending
-        deposit payment (`depositPaid = false`) and a deadline that has not expired yet.
-
-        **Usage (frontend):** Call this endpoint after login or when the user navigates to
-        their reservations page. If the list is non-empty, display a payment reminder modal
-        for each pending payment.
-
-        Returns an **empty array** when there are no pending payments.
+      description: Returns active reservations of the authenticated guest with pending deposit payment and a non-expired payment deadline.
       operationId: getPendingPaymentNotifications
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: List of pending payment notifications (may be empty)
+          description: List of pending payment notifications, which may be empty
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/PaymentNotification'
-              example:
-                - reservationId: 12345
-                  accommodationTitle: "Cabaña en el Quindío"
-                  depositAmount: 200.00
-                  currency: "COP"
-                  bankAccountNumber: "3001234567890"
-                  paymentDeadline: "2025-04-18T09:00:00"
         '401':
-          description: Unauthorized — valid JWT token required
+          description: Unauthorized, valid JWT token required
           content:
             application/json:
               schema:
@@ -707,6 +860,7 @@ components:
   schemas:
     Error:
       type: object
+      description: Standard error payload returned by the API.
       properties:
         message:
           type: string
@@ -717,14 +871,40 @@ components:
       required:
         - message
         - code
+
+    MessageResponse:
+      type: object
+      description: Generic response with a single message field.
+      properties:
+        message:
+          type: string
+          example: Operation completed successfully
+      required:
+        - message
+
     TokenResponse:
       type: object
+      description: JWT access token returned after successful authentication.
       properties:
         token:
           type: string
-          example: eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ1c2VyQGV4YW1wbGUuY29tIiwiZXhwIjoxNzI1ODk4MDAwfQ.abc
+          example: eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ1c2VyQGV4YW1wbGUuY29tIiwiZXhwIjoxNzI1ODk4MDAwfQ.signature
       required:
         - token
+
+    Role:
+      type: string
+      enum:
+        - GUEST
+        - HOST
+
+    ReservationStatus:
+      type: string
+      enum:
+        - ACTIVE
+        - CANCELLED
+        - COMPLETED
+
     UserSignupRequest:
       type: object
       properties:
@@ -735,13 +915,13 @@ components:
           example: john.doe@example.com
         password:
           type: string
-          pattern: ^(?=.*[A-Z])(?=.*\\d).{8,}$
+          pattern: ^(?=.*[A-Z])(?=.*\d).{8,}$
           example: P@ssw0rd123
         roles:
           type: array
+          uniqueItems: true
           items:
             $ref: '#/components/schemas/Role'
-          uniqueItems: true
           example:
             - GUEST
             - HOST
@@ -751,12 +931,12 @@ components:
           example: John Giggity Doe
         phoneNumber:
           type: string
-          pattern: ^\\+57\\s?\\d{10}$
+          pattern: ^\+57\s?\d{10}$
           example: +573101234567
         birthDate:
           type: string
           format: date
-          example: 1990-01-01
+          example: '1990-01-01'
         profilePicture:
           type: string
           format: uri
@@ -768,9 +948,51 @@ components:
         - fullName
         - phoneNumber
         - birthDate
+        - profilePicture
+
     UserSignupResponse:
-      allOf:
-        - $ref: '#/components/schemas/UserSignupRequest'
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 100
+          example: john.doe@example.com
+        password:
+          type: string
+          example: P@ssw0rd123
+        roles:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Role'
+          example:
+            - GUEST
+            - HOST
+        fullName:
+          type: string
+          maxLength: 100
+          example: John Giggity Doe
+        phoneNumber:
+          type: string
+          example: +573101234567
+        birthDate:
+          type: string
+          format: date
+          example: '1990-01-01'
+        profilePicture:
+          type: string
+          format: uri
+          example: https://example.com/profile.jpg
+      required:
+        - email
+        - password
+        - roles
+        - fullName
+        - phoneNumber
+        - birthDate
+        - profilePicture
+
     UserLoginRequest:
       type: object
       properties:
@@ -784,6 +1006,271 @@ components:
       required:
         - email
         - password
+
+    ForgotPasswordRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: john.doe@example.com
+      required:
+        - email
+
+    ResetPasswordRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: john.doe@example.com
+        code:
+          type: string
+          example: '123456'
+        newPassword:
+          type: string
+          pattern: ^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=!])(?=\S+$).{8,}$
+          example: NewPassword123!
+      required:
+        - email
+        - code
+        - newPassword
+
+    ChangePasswordRequest:
+      type: object
+      properties:
+        currentPassword:
+          type: string
+          example: OldPassword123!
+        newPassword:
+          type: string
+          pattern: ^(?=.*\d)(?=.*\p{Ll})(?=.*\p{Lu})(?=.*[^\p{L}\d\s]).{8,}$
+          example: NewPassword123!
+      required:
+        - currentPassword
+        - newPassword
+
+    CreateAccommodationRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 100
+          example: Cabana familiar con vista al valle
+        description:
+          type: string
+          maxLength: 1000
+          example: Cabana campestre equipada para familias, con cocina integral, zona BBQ y vista panoramica al valle.
+        capacity:
+          type: integer
+          minimum: 1
+          maximum: 50
+          example: 6
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          example: COP
+        pricePerNight:
+          type: number
+          format: double
+          minimum: 0.01
+          example: 180000.00
+        mainImage:
+          type: string
+          format: uri
+          example: https://images.example.com/accommodations/main/cabana-valle.jpg
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+          example: -75.6811
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+          example: 4.5339
+        locationDescription:
+          type: string
+          maxLength: 100
+          example: A 10 minutos del Parque del Cafe, sobre via principal pavimentada.
+        city:
+          type: string
+          maxLength: 100
+          example: Armenia
+        images:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uri
+            example: https://images.example.com/accommodations/gallery/cabana-valle-sala.jpg
+      required:
+        - title
+        - description
+        - capacity
+        - currency
+        - pricePerNight
+        - mainImage
+        - longitude
+        - latitude
+        - locationDescription
+        - city
+        - images
+
+    CreateAccommodationResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 15
+        hostId:
+          type: integer
+          format: int64
+          example: 8
+        hostEmail:
+          type: string
+          format: email
+          example: host@example.com
+        title:
+          type: string
+          example: Cabana familiar con vista al valle
+        description:
+          type: string
+          example: Cabana campestre equipada para familias, con cocina integral, zona BBQ y vista panoramica al valle.
+        capacity:
+          type: integer
+          example: 6
+        currency:
+          type: string
+          example: COP
+        pricePerNight:
+          type: number
+          format: double
+          example: 180000.00
+        mainImage:
+          type: string
+          format: uri
+          example: https://images.example.com/accommodations/main/cabana-valle.jpg
+        longitude:
+          type: number
+          format: double
+          example: -75.6811
+        latitude:
+          type: number
+          format: double
+          example: 4.5339
+        locationDescription:
+          type: string
+          example: A 10 minutos del Parque del Cafe, sobre via principal pavimentada.
+        city:
+          type: string
+          example: Armenia
+        images:
+          type: array
+          items:
+            type: string
+            format: uri
+        available:
+          type: boolean
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-04-28T20:45:00'
+        updatedAt:
+          type: string
+          format: date-time
+          example: '2026-04-28T20:45:00'
+      required:
+        - id
+        - hostId
+        - hostEmail
+        - title
+        - description
+        - capacity
+        - currency
+        - pricePerNight
+        - mainImage
+        - longitude
+        - latitude
+        - locationDescription
+        - city
+        - images
+        - available
+        - createdAt
+        - updatedAt
+
+    User:
+      type: object
+      description: Current serialized shape of the nested host object returned by the accommodation detail endpoint.
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        email:
+          type: string
+          format: email
+          example: carlos.ramirez@email.com
+        password:
+          type: string
+          example: $2a$10$hashedPasswordValue
+        roles:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Role'
+        fullName:
+          type: string
+          example: Carlos Ramirez
+        phoneNumber:
+          type: string
+          example: +573001112233
+        birthDate:
+          type: string
+          format: date
+          example: '1988-04-12'
+        deleted:
+          type: boolean
+          example: false
+        profilePicture:
+          type: string
+          format: uri
+          nullable: true
+          example: https://images.example.com/profiles/carlos.jpg
+        passwordRecoveryCode:
+          type: string
+          nullable: true
+          example: null
+        passwordRecoveryExpiration:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-04-01T10:00:00'
+        updatedAt:
+          type: string
+          format: date-time
+          example: '2026-04-10T08:30:00'
+      required:
+        - id
+        - email
+        - password
+        - roles
+        - fullName
+        - phoneNumber
+        - birthDate
+        - deleted
+        - createdAt
+        - updatedAt
+
     AccommodationGetByIdResponse:
       type: object
       properties:
@@ -792,24 +1279,31 @@ components:
         title:
           type: string
           maxLength: 100
+          example: Beachfront Villa with Pool
         description:
           type: string
           maxLength: 1000
+          example: Spacious villa with private pool and direct beach access.
         capacity:
           type: integer
           minimum: 1
+          example: 6
         pricePerNight:
           type: number
           format: double
+          example: 250000.00
         mainImage:
           type: string
           format: uri
+          example: https://images.example.com/accommodations/main/beachfront-villa.jpg
         locationDescription:
           type: string
           maxLength: 100
+          example: Near the main beach and local restaurants
         city:
           type: string
           maxLength: 100
+          example: Cartagena
         images:
           type: array
           items:
@@ -817,6 +1311,7 @@ components:
             format: uri
         available:
           type: boolean
+          example: true
       required:
         - host
         - title
@@ -827,9 +1322,10 @@ components:
         - city
         - images
         - available
+
     AccommodationSearchByCityResponse:
       type: object
-      description: Basic accommodation data returned by city search.
+      description: Compact accommodation data returned by city search.
       properties:
         accommodationCode:
           type: integer
@@ -862,117 +1358,52 @@ components:
         - capacity
         - pricePerNight
         - currency
-    User:
+        - mainImage
+
+    AccommodationSearchByCityPage:
       type: object
       properties:
-        id:
-          type: integer
-          format: int64
-        email:
-          type: string
-          format: email
-        password:
-          type: string
-        roles:
+        content:
           type: array
           items:
-            $ref: '#/components/schemas/Role'
-          uniqueItems: true
-        fullName:
-          type: string
-        phoneNumber:
-          type: string
-        birthDate:
-          type: string
-          format: date
-        deleted:
+            $ref: '#/components/schemas/AccommodationSearchByCityResponse'
+        pageable:
+          type: object
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        size:
+          type: integer
+        number:
+          type: integer
+        numberOfElements:
+          type: integer
+        first:
           type: boolean
-        profilePicture:
-          type: string
-          format: uri
-          nullable: true
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-    Role:
-      type: string
-      enum:
-        - GUEST
-        - HOST
-    MessageResponse:
-      type: object
-      properties:
-        message:
-          type: string
-          example: Operación realizada exitosamente
+        last:
+          type: boolean
+        empty:
+          type: boolean
       required:
-        - message
-    ForgotPasswordRequest:
-      type: object
-      properties:
-        email:
-          type: string
-          format: email
-          example: john.doe@example.com
-      required:
-        - email
-    ResetPasswordRequest:
-      type: object
-      properties:
-        email:
-          type: string
-          format: email
-          example: john.doe@example.com
-        code:
-          type: string
-          example: "123456"
-        newPassword:
-          type: string
-          pattern: ^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=!])(?=\S+$).{8,}$
-          example: NewP@ssw0rd!
-      required:
-        - email
-        - code
-        - newPassword
-    ChangePasswordRequest:
-      type: object
-      properties:
-        currentPassword:
-          type: string
-          example: OldP@ssw0rd123
-        newPassword:
-          type: string
-          pattern: ^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=!])(?=\S+$).{8,}$
-          example: NewP@ssw0rd!
-      required:
-        - currentPassword
-        - newPassword
+        - content
 
-    # ─────────────────────────────────────
-    # NEW schemas — v1.1 (Payment notice)
-    # ─────────────────────────────────────
     CreateReservationRequest:
       type: object
-      description: Request body for creating a new reservation.
       properties:
         accommodationId:
           type: integer
           format: int64
-          description: ID of the accommodation to reserve
           example: 1
         startDate:
           type: string
           format: date-time
-          description: Check-in date and time (must be in the future)
-          example: "2025-06-01T15:00:00"
+          example: '2025-06-01T15:00:00'
         endDate:
           type: string
           format: date-time
-          description: Check-out date and time (must be after startDate)
-          example: "2025-06-05T11:00:00"
+          example: '2025-06-05T11:00:00'
       required:
         - accommodationId
         - startDate
@@ -980,89 +1411,65 @@ components:
 
     UpdateReservationRequest:
       type: object
-      description: Request body for updating the date range of an active reservation.
       properties:
         startDate:
           type: string
           format: date-time
-          description: New check-in date and time
-          example: "2025-06-03T15:00:00"
+          example: '2025-06-03T15:00:00'
         endDate:
           type: string
           format: date-time
-          description: New check-out date and time. Must be after startDate.
-          example: "2025-06-07T11:00:00"
+          example: '2025-06-07T11:00:00'
       required:
         - startDate
         - endDate
 
     CreateReservationResponse:
       type: object
-      description: |
-        Response returned after a reservation is created.
-        Includes payment details for the mandatory 20% advance deposit.
       properties:
         id:
           type: integer
           format: int64
-          description: Unique identifier of the reservation
           example: 12345
         startDate:
           type: string
           format: date-time
-          description: Check-in date and time
-          example: "2025-06-01T15:00:00"
+          example: '2025-06-01T15:00:00'
         endDate:
           type: string
           format: date-time
-          description: Check-out date and time
-          example: "2025-06-05T11:00:00"
+          example: '2025-06-05T11:00:00'
         totalPrice:
           type: number
           format: double
-          description: Total price for the reservation
           example: 1000.00
         currency:
           type: string
-          description: Currency code (ISO 4217)
-          example: "COP"
+          example: COP
         status:
-          type: string
-          enum: [ACTIVE, COMPLETED, CANCELLED, NO_SHOW]
-          description: Current status of the reservation
-          example: "ACTIVE"
+          $ref: '#/components/schemas/ReservationStatus'
         accommodationId:
           type: integer
           format: int64
-          description: ID of the booked accommodation
           example: 1
         accommodationTitle:
           type: string
-          description: Name of the booked accommodation
-          example: "Cabaña en el Quindío"
+          example: Beachfront Villa with Pool
         userId:
           type: integer
           format: int64
-          description: ID of the guest who made the reservation
           example: 678
         depositAmount:
           type: number
           format: double
-          description: |
-            Required advance deposit — 20% of `totalPrice`.
-            The guest must transfer this amount to `bankAccountNumber` before `paymentDeadline`.
           example: 200.00
         bankAccountNumber:
           type: string
-          description: Bank account number where the deposit transfer must be made
-          example: "3001234567890"
+          example: '3001234567890'
         paymentDeadline:
           type: string
           format: date-time
-          description: |
-            Deadline to complete the deposit payment.
-            Calculated as 3 days from the moment the reservation is created.
-          example: "2025-04-18T09:00:00"
+          example: '2025-04-18T23:59:59'
       required:
         - id
         - startDate
@@ -1077,90 +1484,67 @@ components:
         - bankAccountNumber
         - paymentDeadline
 
-    RetrieveReservationSummaryResponse:
-      type: object
-      properties:
-        id:
-          type: integer
-          format: int64
-        accommodationId:
-          type: integer
-          format: int64
-        accommodationTitle:
-          type: string
-        startDate:
-          type: string
-          format: date-time
-        endDate:
-          type: string
-          format: date-time
-        totalPrice:
-          type: number
-          format: double
-        currency:
-          type: string
-          example: COP
-        status:
-          type: string
-          enum: [ACTIVE, COMPLETED, CANCELLED, NO_SHOW]
-      required:
-        - id
-        - accommodationId
-        - accommodationTitle
-        - startDate
-        - endDate
-        - totalPrice
-        - currency
-        - status
-
     RetrieveReservationResponse:
       type: object
       properties:
         id:
           type: integer
           format: int64
+          example: 12345
         startDate:
           type: string
           format: date-time
+          example: '2025-06-01T15:00:00'
         endDate:
           type: string
           format: date-time
+          example: '2025-06-05T11:00:00'
         accommodationId:
           type: integer
           format: int64
+          example: 1
         accommodationTitle:
           type: string
+          example: Beachfront Villa with Pool
         accommodationCity:
           type: string
+          example: Medellin
         guestId:
           type: integer
           format: int64
+          example: 678
         guestEmail:
           type: string
           format: email
+          example: johndoe@gmail.com
         totalPrice:
           type: number
           format: double
+          example: 1250000
         currency:
           type: string
           example: COP
         depositAmount:
           type: number
           format: double
+          example: 250000
         depositPaid:
           type: boolean
+          example: true
         paymentDeadline:
           type: string
           format: date-time
+          example: '2025-06-04T23:59:59'
         status:
-          type: string
-          enum: [ACTIVE, COMPLETED, CANCELLED, NO_SHOW]
+          $ref: '#/components/schemas/ReservationStatus'
         createdAt:
           type: string
           format: date-time
+          example: '2025-06-01T15:00:00'
         updatedAt:
           type: string
           format: date-time
+          example: '2025-06-01T15:00:00'
       required:
         - id
         - startDate
@@ -1179,37 +1563,195 @@ components:
         - createdAt
         - updatedAt
 
-    PaymentNotification:
+    RetrieveReservationSummaryResponse:
       type: object
-      description: In-app notification for a pending advance deposit payment.
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 12345
+        accommodationId:
+          type: integer
+          format: int64
+          example: 1
+        accommodationTitle:
+          type: string
+          example: Beachfront Villa with Pool
+        startDate:
+          type: string
+          format: date-time
+          example: '2025-06-01T15:00:00'
+        endDate:
+          type: string
+          format: date-time
+          example: '2025-06-05T11:00:00'
+        totalPrice:
+          type: number
+          format: double
+          example: 1250000
+        currency:
+          type: string
+          example: COP
+        status:
+          $ref: '#/components/schemas/ReservationStatus'
+      required:
+        - id
+        - accommodationId
+        - accommodationTitle
+        - startDate
+        - endDate
+        - totalPrice
+        - currency
+        - status
+
+    RetrieveReservationSummaryPage:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/RetrieveReservationSummaryResponse'
+        pageable:
+          type: object
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        size:
+          type: integer
+        number:
+          type: integer
+        numberOfElements:
+          type: integer
+        first:
+          type: boolean
+        last:
+          type: boolean
+        empty:
+          type: boolean
+      required:
+        - content
+
+    CreateReviewRequest:
+      type: object
       properties:
         reservationId:
           type: integer
           format: int64
-          description: Unique identifier of the reservation
+          minimum: 1
+          example: 45
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+          example: 5
+        comment:
+          type: string
+          maxLength: 1000
+          example: Excelente alojamiento, muy limpio y bien ubicado.
+      required:
+        - reservationId
+        - rating
+        - comment
+
+    RespondReviewRequest:
+      type: object
+      properties:
+        response:
+          type: string
+          maxLength: 1000
+          example: Gracias por tu visita. Nos alegra saber que disfrutaste la estadia.
+      required:
+        - response
+
+    ReviewResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 12
+        accommodationId:
+          type: integer
+          format: int64
+          example: 7
+        guestId:
+          type: integer
+          format: int64
+          example: 18
+        guestName:
+          type: string
+          example: Juan Perez
+        stayStartDate:
+          type: string
+          format: date-time
+          example: '2026-05-10T15:00:00'
+        stayEndDate:
+          type: string
+          format: date-time
+          example: '2026-05-14T11:00:00'
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+          example: 5
+        comment:
+          type: string
+          example: Excelente alojamiento, muy limpio y con una vista hermosa.
+        hostResponse:
+          type: string
+          nullable: true
+          example: Muchas gracias por tu visita. Siempre seras bienvenido.
+        hostRespondedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-05-16T09:30:00'
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-05-15T18:00:00'
+        updatedAt:
+          type: string
+          format: date-time
+          example: '2026-05-16T09:30:00'
+      required:
+        - id
+        - accommodationId
+        - guestId
+        - guestName
+        - stayStartDate
+        - stayEndDate
+        - rating
+        - comment
+        - createdAt
+        - updatedAt
+
+    PaymentNotification:
+      type: object
+      properties:
+        reservationId:
+          type: integer
+          format: int64
           example: 12345
         accommodationTitle:
           type: string
-          description: Name of the booked accommodation
-          example: "Cabaña en el Quindío"
+          example: Cabana en el Quindio
         depositAmount:
           type: number
           format: double
-          description: Pending deposit amount (20% of total price)
           example: 200.00
         currency:
           type: string
-          description: Currency code (ISO 4217)
-          example: "COP"
+          example: COP
         bankAccountNumber:
           type: string
-          description: Bank account number for the transfer
-          example: "3001234567890"
+          example: '3001234567890'
         paymentDeadline:
           type: string
           format: date-time
-          description: Deadline to complete the payment
-          example: "2025-04-18T09:00:00"
+          example: '2025-04-18T23:59:59'
       required:
         - reservationId
         - accommodationTitle

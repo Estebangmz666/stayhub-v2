@@ -4,8 +4,11 @@ import edu.uniquindio.stayhub_v2.exception.AccommodationNotFoundException;
 import edu.uniquindio.stayhub_v2.exception.ActiveReservationsException;
 import edu.uniquindio.stayhub_v2.exception.UnauthorizedHostException;
 import edu.uniquindio.stayhub_v2.dto.accommodation.AccommodationGetByIdResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.accommodation.CreateAccommodationRequestDTO;
+import edu.uniquindio.stayhub_v2.dto.accommodation.CreateAccommodationResponseDTO;
 import edu.uniquindio.stayhub_v2.mapper.AccommodationMapper;
 import edu.uniquindio.stayhub_v2.model.Accommodation;
+import edu.uniquindio.stayhub_v2.model.Role;
 import edu.uniquindio.stayhub_v2.model.ReservationStatus;
 import edu.uniquindio.stayhub_v2.model.User;
 import edu.uniquindio.stayhub_v2.repository.AccommodationRepository;
@@ -25,9 +28,11 @@ import java.time.LocalDateTime;
 import java.util.Currency;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -46,6 +51,9 @@ public class AccommodationServiceTest {
         @Mock
         private AccommodationMapper accommodationMapper;
 
+        @Mock
+        private UserService userService;
+
         @InjectMocks
         private AccommodationService accommodationService;
 
@@ -56,6 +64,7 @@ public class AccommodationServiceTest {
                 User hostUser = User.builder()
                                 .id(1L)
                                 .email("host@example.com")
+                                .roles(Set.of(Role.HOST))
                                 .build();
 
                 testAccommodation = Accommodation.builder()
@@ -64,6 +73,122 @@ public class AccommodationServiceTest {
                                 .deleted(false)
                                 .available(true)
                                 .build();
+        }
+
+        @Test
+        void createAccommodation_HostUser_PersistsAccommodationAndReturnsResponse() {
+                CreateAccommodationRequestDTO requestDTO = new CreateAccommodationRequestDTO(
+                                "Cabana familiar con vista al valle",
+                                "Cabana campestre equipada para familias.",
+                                6,
+                                "COP",
+                                new BigDecimal("180000.00"),
+                                "https://images.example.com/accommodations/main/cabana-valle.jpg",
+                                -75.6811,
+                                4.5339,
+                                "A 10 minutos del Parque del Cafe.",
+                                "Armenia",
+                                List.of("https://images.example.com/accommodations/gallery/cabana-valle-sala.jpg"));
+
+                Accommodation mappedAccommodation = Accommodation.builder()
+                                .title(requestDTO.title())
+                                .description(requestDTO.description())
+                                .capacity(requestDTO.capacity())
+                                .currency(Currency.getInstance("COP"))
+                                .pricePerNight(requestDTO.pricePerNight())
+                                .mainImage(requestDTO.mainImage())
+                                .longitude(requestDTO.longitude())
+                                .latitude(requestDTO.latitude())
+                                .locationDescription(requestDTO.locationDescription())
+                                .city(requestDTO.city())
+                                .images(requestDTO.images())
+                                .build();
+
+                Accommodation savedAccommodation = Accommodation.builder()
+                                .id(15L)
+                                .host(testAccommodation.getHost())
+                                .title(requestDTO.title())
+                                .description(requestDTO.description())
+                                .capacity(requestDTO.capacity())
+                                .currency(Currency.getInstance("COP"))
+                                .pricePerNight(requestDTO.pricePerNight())
+                                .mainImage(requestDTO.mainImage())
+                                .longitude(requestDTO.longitude())
+                                .latitude(requestDTO.latitude())
+                                .locationDescription(requestDTO.locationDescription())
+                                .city(requestDTO.city())
+                                .images(requestDTO.images())
+                                .available(true)
+                                .deleted(false)
+                                .createdAt(LocalDateTime.now())
+                                .updatedAt(LocalDateTime.now())
+                                .build();
+
+                CreateAccommodationResponseDTO responseDTO = new CreateAccommodationResponseDTO(
+                                15L,
+                                1L,
+                                "host@example.com",
+                                requestDTO.title(),
+                                requestDTO.description(),
+                                requestDTO.capacity(),
+                                "COP",
+                                requestDTO.pricePerNight(),
+                                requestDTO.mainImage(),
+                                requestDTO.longitude(),
+                                requestDTO.latitude(),
+                                requestDTO.locationDescription(),
+                                requestDTO.city(),
+                                requestDTO.images(),
+                                true,
+                                savedAccommodation.getCreatedAt(),
+                                savedAccommodation.getUpdatedAt());
+
+                when(userService.getCurrentUser()).thenReturn(testAccommodation.getHost());
+                when(accommodationMapper.toEntity(requestDTO)).thenReturn(mappedAccommodation);
+                when(accommodationRepository.save(any(Accommodation.class))).thenReturn(savedAccommodation);
+                when(accommodationMapper.toCreateAccommodationResponseDTO(savedAccommodation)).thenReturn(responseDTO);
+
+                CreateAccommodationResponseDTO response = accommodationService.createAccommodation(requestDTO);
+
+                assertThat(response.id()).isEqualTo(15L);
+                assertThat(response.hostEmail()).isEqualTo("host@example.com");
+                assertThat(response.available()).isTrue();
+
+                verify(accommodationRepository).save(argThat(accommodation ->
+                                accommodation.getHost().equals(testAccommodation.getHost())
+                                                && accommodation.isAvailable()
+                                                && !accommodation.isDeleted()));
+        }
+
+        @Test
+        void createAccommodation_NonHostUser_ThrowsUnauthorizedHostException() {
+                User guestUser = User.builder()
+                                .id(2L)
+                                .email("guest@example.com")
+                                .roles(Set.of(Role.GUEST))
+                                .build();
+
+                CreateAccommodationRequestDTO requestDTO = new CreateAccommodationRequestDTO(
+                                "Cabana familiar con vista al valle",
+                                "Cabana campestre equipada para familias.",
+                                6,
+                                "COP",
+                                new BigDecimal("180000.00"),
+                                "https://images.example.com/accommodations/main/cabana-valle.jpg",
+                                -75.6811,
+                                4.5339,
+                                "A 10 minutos del Parque del Cafe.",
+                                "Armenia",
+                                List.of("https://images.example.com/accommodations/gallery/cabana-valle-sala.jpg"));
+
+                when(userService.getCurrentUser()).thenReturn(guestUser);
+
+                assertThatThrownBy(() -> accommodationService.createAccommodation(requestDTO))
+                                .isInstanceOf(UnauthorizedHostException.class)
+                                .hasMessageContaining("rol HOST");
+
+                verify(accommodationMapper, never()).toEntity(any());
+                verify(accommodationRepository, never()).save(any());
         }
 
         @Test

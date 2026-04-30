@@ -1,8 +1,13 @@
 package edu.uniquindio.stayhub_v2.mapper;
 
+import edu.uniquindio.stayhub_v2.dto.accommodation.CreateAccommodationRequestDTO;
+import edu.uniquindio.stayhub_v2.dto.accommodation.CreateAccommodationResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.accommodation.AccommodationGetByIdResponseDTO;
 import edu.uniquindio.stayhub_v2.model.Accommodation;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+
+import java.util.Currency;
 
 /**
  * Mapper interface for converting Accommodation entities to DTOs.
@@ -41,6 +46,16 @@ import org.mapstruct.Mapper;
 @Mapper(componentModel = "spring")
 public interface AccommodationMapper {
 
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "host", ignore = true)
+    @Mapping(target = "reviews", ignore = true)
+    @Mapping(target = "reservations", ignore = true)
+    @Mapping(target = "deleted", ignore = true)
+    @Mapping(target = "available", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    Accommodation toEntity(CreateAccommodationRequestDTO requestDTO);
+
     /**
      * Maps an Accommodation entity to an AccommodationGetByIdResponseDTO.
      *
@@ -60,4 +75,17 @@ public interface AccommodationMapper {
      * @return AccommodationGetByIdResponseDTO containing the mapped data
      */
     AccommodationGetByIdResponseDTO toAccommodationGetByIdResponseDTO(Accommodation accommodation);
+
+    @Mapping(target = "hostId", source = "host.id")
+    @Mapping(target = "hostEmail", source = "host.email")
+    @Mapping(target = "currency", expression = "java(mapCurrencyToCode(accommodation.getCurrency()))")
+    CreateAccommodationResponseDTO toCreateAccommodationResponseDTO(Accommodation accommodation);
+
+    default Currency mapCurrency(String currencyCode) {
+        return Currency.getInstance(currencyCode.trim().toUpperCase());
+    }
+
+    default String mapCurrencyToCode(Currency currency) {
+        return currency == null ? null : currency.getCurrencyCode();
+    }
 }

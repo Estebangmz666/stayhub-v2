@@ -2,9 +2,13 @@ package edu.uniquindio.stayhub_v2.service;
 
 import edu.uniquindio.stayhub_v2.dto.accommodation.AccommodationGetByIdResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.accommodation.AccommodationSearchByCityResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.accommodation.CreateAccommodationRequestDTO;
+import edu.uniquindio.stayhub_v2.dto.accommodation.CreateAccommodationResponseDTO;
 import edu.uniquindio.stayhub_v2.exception.AccommodationNotFoundException;
 import edu.uniquindio.stayhub_v2.mapper.AccommodationMapper;
 import edu.uniquindio.stayhub_v2.model.Accommodation;
+import edu.uniquindio.stayhub_v2.model.Role;
+import edu.uniquindio.stayhub_v2.model.User;
 import edu.uniquindio.stayhub_v2.repository.AccommodationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -88,6 +92,30 @@ public class AccommodationService {
     private final AccommodationRepository accommodationRepository;
     private final AccommodationMapper accommodationMapper;
     private final ReservationRepository reservationRepository;
+    private final UserService userService;
+
+    @Transactional
+    public CreateAccommodationResponseDTO createAccommodation(CreateAccommodationRequestDTO requestDTO) {
+        User currentUser = userService.getCurrentUser();
+
+        if (currentUser.getRoles() == null || !currentUser.getRoles().contains(Role.HOST)) {
+            throw new UnauthorizedHostException("Solo los usuarios con rol HOST pueden registrar alojamientos.");
+        }
+
+        Accommodation accommodation = accommodationMapper.toEntity(requestDTO);
+        accommodation.setHost(currentUser);
+        accommodation.setAvailable(true);
+        accommodation.setDeleted(false);
+        accommodation.setTitle(requestDTO.title().trim());
+        accommodation.setDescription(requestDTO.description().trim());
+        accommodation.setCity(requestDTO.city().trim());
+        accommodation.setLocationDescription(requestDTO.locationDescription().trim());
+
+        Accommodation savedAccommodation = accommodationRepository.save(accommodation);
+
+        log.info("Accommodation {} created successfully by host {}", savedAccommodation.getId(), currentUser.getEmail());
+        return accommodationMapper.toCreateAccommodationResponseDTO(savedAccommodation);
+    }
 
     /**
      * Retrieves an active accommodation by its unique identifier.

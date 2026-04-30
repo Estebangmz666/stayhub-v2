@@ -67,7 +67,7 @@ import java.util.Set;
  * authenticate, but their historical data (reservations, reviews, listed
  * accommodations) remains in the system for referential integrity.</p>
  *
- * @author Esteban Gómez León
+ * @author Stayhub Dev Team
  * @version 1.0
  * @since 1.0
  * @see Auditable

@@ -249,6 +249,24 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(ReviewNotFoundException.class)
+    public ResponseEntity<Error> handleReviewNotFoundException(ReviewNotFoundException e) {
+        log.warn("Review not found: {}", e.getMessage());
+        return new ResponseEntity<>(
+                new Error(e.getMessage(), HttpStatus.NOT_FOUND.value()),
+                HttpStatus.NOT_FOUND
+        );
+    }
+
+    @ExceptionHandler(ReviewPolicyViolationException.class)
+    public ResponseEntity<Error> handleReviewPolicyViolationException(ReviewPolicyViolationException e) {
+        log.warn("Review policy violation: {}", e.getMessage());
+        return new ResponseEntity<>(
+                new Error(e.getMessage(), HttpStatus.BAD_REQUEST.value()),
+                HttpStatus.BAD_REQUEST
+        );
+    }
+
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     public ResponseEntity<Error> handleAccessDeniedException(org.springframework.security.access.AccessDeniedException e) {
         log.warn("Access denied: {}", e.getMessage());

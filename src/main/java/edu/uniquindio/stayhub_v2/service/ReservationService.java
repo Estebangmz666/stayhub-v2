@@ -448,22 +448,25 @@ public class ReservationService {
         log.info("Marking deposit as paid for reservation {}", reservationId);
 
         User currentUser = userService.getCurrentUser();
-        Reservation reservation = reservationRepository.findAuthorizedById(
-                        reservationId,
-                        currentUser.getId()
-                )
-                .orElseThrow(() -> new ReservationNotFoundException(
-                        "Reservation with ID " + reservationId + " not found"
-                ));
+        Reservation reservation = getReservationForGuestManagement(reservationId, currentUser);
 
         validateReservationIsActive(reservation);
 
+        int updatedRows = reservationRepository.markDepositAsPaidForGuest(
+                reservationId,
+                currentUser.getId(),
+                ReservationStatus.ACTIVE
+        );
+
+        if (updatedRows == 0) {
+            throw new ReservationPolicyViolationException(
+                    "Deposit can only be paid for an active reservation owned by the authenticated guest");
+        }
+
         reservation.setDepositPaid(true);
+        log.info("Deposit marked as paid for reservation {}", reservation.getId());
 
-        Reservation updated = reservationRepository.save(reservation);
-        log.info("Deposit marked as paid for reservation {}", updated.getId());
-
-        return reservationMapper.toRetrieveDTO(updated);
+        return reservationMapper.toRetrieveDTO(reservation);
     }
 
     @Transactional

@@ -31,6 +31,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
@@ -548,12 +549,37 @@ class ReservationServiceTest {
         when(userService.getCurrentUser()).thenReturn(guest);
         when(reservationRepository.findAuthorizedById(100L, guest.getId()))
                 .thenReturn(Optional.of(savedReservation));
-        when(reservationRepository.save(any(Reservation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(reservationRepository.markDepositAsPaidForGuest(
+                100L,
+                guest.getId(),
+                ReservationStatus.ACTIVE
+        )).thenReturn(1);
         when(reservationMapper.toRetrieveDTO(any(Reservation.class))).thenReturn(retrieveDto());
 
         reservationService.markDepositAsPaid(100L);
 
         assertThat(savedReservation.getDepositPaid()).isTrue();
+        verify(reservationRepository).markDepositAsPaidForGuest(
+                100L,
+                guest.getId(),
+                ReservationStatus.ACTIVE
+        );
+        verify(reservationRepository, never()).save(any());
+    }
+
+    @Test
+    void markDepositAsPaid_HostUser_ThrowsAccessDeniedException() {
+        savedReservation.setDepositPaid(false);
+
+        when(userService.getCurrentUser()).thenReturn(host);
+        when(reservationRepository.findAuthorizedById(100L, host.getId()))
+                .thenReturn(Optional.of(savedReservation));
+
+        assertThatThrownBy(() -> reservationService.markDepositAsPaid(100L))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("Only the guest");
+
+        verify(reservationRepository, never()).markDepositAsPaidForGuest(any(), any(), any());
     }
 
     @Test

@@ -3,10 +3,10 @@ package edu.uniquindio.stayhub_v2.repository;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryProjectionDTO;
 import edu.uniquindio.stayhub_v2.model.Reservation;
 import edu.uniquindio.stayhub_v2.model.ReservationStatus;
-import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -86,7 +86,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
      * <p><b>Use Cases:</b></p>
      * <ul>
      *   <li>Validating if an accommodation can be deleted (check for any future reservations)</li>
-     *   <li>Checking if price changes will affect existing bookings</li>
+     *   <li>Checking if price changes affect existing bookings</li>
      *   <li>Determining if an accommodation can be marked as unavailable</li>
      *   <li>Validating if a host can modify check-in/out hours for existing reservations</li>
      * </ul>
@@ -126,7 +126,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             ReservationStatus status);
 
     /**
-     * Checks if an accommodation has any active reservation that overlaps with
+     * Checks if accommodation has any active reservation that overlaps with
      * a specified date range.
      *
      * <p>This is the primary method for validating accommodation availability
@@ -260,7 +260,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
      *
      * @param from Start of the time window
      * @param to   End of the time window
-     * @return List of reservations with payment deadline in the window
+     * @return List of reservations with a payment deadline in the window
      */
     @Query("""
     SELECT r FROM Reservation r
@@ -282,6 +282,20 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
 """)
     List<Reservation> findExpiredUnpaidReservations(@Param("now") LocalDateTime now);
 
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+    UPDATE Reservation r
+    SET r.depositPaid = true
+    WHERE r.id = :reservationId
+    AND r.guest.id = :guestId
+    AND r.status = :activeStatus
+""")
+    int markDepositAsPaidForGuest(
+            @Param("reservationId") Long reservationId,
+            @Param("guestId") Long guestId,
+            @Param("activeStatus") ReservationStatus activeStatus
+    );
+
     @Query("""
     SELECT r FROM Reservation r
     WHERE r.id = :reservationId
@@ -294,8 +308,6 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             @Param("reservationId") Long reservationId,
             @Param("userId") Long userId
     );
-
-    Optional<Reservation> findById(@NonNull Long id);
 
     @Query("""
     SELECT new edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryProjectionDTO(
