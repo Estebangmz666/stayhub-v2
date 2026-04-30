@@ -335,9 +335,6 @@ GNU GPL V3.0 License
 - Esteban Gomez Leon
 - Juan Pablo Galeano Correa
 
-
-- `https://github.com/estebangmz666/stayhub-v2`
-
 ---
 
-Built with Java, Spring Boot, JWT security, scheduled jobs, and a layered backend architecture.
+<p align="center"> Made with <3 by Stayhub Dev Team </p>
