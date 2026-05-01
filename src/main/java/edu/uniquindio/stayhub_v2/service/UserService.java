@@ -96,7 +96,7 @@ import java.util.Random;
  * }
  * }</pre>
  *
- * @author Esteban Gómez León
+ * @author Stayhub Dev Team
  * @version 1.0
  * @since 1.0
  * @see UserRepository
@@ -120,32 +120,30 @@ public class UserService {
     private final Random secureRandom = new SecureRandom();
 
     /**
-     * Retrieves the currently authenticated user from the Spring Security context.
+     * Retrieves the currently authenticated application user.
      *
-     * <p>This method extracts the authenticated user principal from the
-     * {@link SecurityContextHolder}. It is used throughout the application
-     * to get the current user for operations that require user context.</p>
+     * <p>The method reads the active {@link Authentication} from the
+     * {@link SecurityContextHolder}, verifies that it represents an authenticated
+     * non-anonymous request, and resolves the principal to the persisted
+     * {@link User} entity. The user is loaded again through
+     * {@link UserRepository#findByEmailWithRoles(String)} so callers receive an
+     * up-to-date entity with its roles available.</p>
      *
-     * <p><b>Requirements:</b></p>
+     * <p>Supported principal types are:</p>
      * <ul>
-     *   <li>User must be authenticated (not anonymous)</li>
-     *   <li>The principal must be a {@link User} entity</li>
+     *   <li>{@link org.springframework.security.core.userdetails.UserDetails}: the
+     *       username is treated as the user's email.</li>
+     *   <li>{@link User}: the entity email is used to reload the persisted user.</li>
      * </ul>
      *
-     * <p><b>Usage Example:</b></p>
-     * <pre>{@code
-     * public void performUserAction() {
-     *     User currentUser = userService.getCurrentUser();
-     *     log.info("Action performed by: {}", currentUser.getEmail());
-     *     // Use currentUser for authorization or data association
-     * }
-     * }</pre>
+     * <p><b>Security note:</b> this method depends on the security filter chain,
+     * including {@link JwtAuthenticationFilter}, having populated the security
+     * context before protected service operations are executed.</p>
      *
-     * <p><b>Security Note:</b> This method relies on the {@link JwtAuthenticationFilter}
-     * having set the {@link User} entity as the principal in the authentication token.</p>
-     *
-     * @return The currently authenticated {@link User} entity
-     * @throws IllegalStateException if no user is authenticated or principal is anonymous
+     * @return the authenticated {@link User} entity with roles loaded
+     * @throws AccessDeniedException if the request has no authenticated user or is anonymous
+     * @throws UsernameNotFoundException if the authenticated principal references a user that no longer exists
+     * @throws IllegalStateException if the authentication principal is {@code null} or has an unsupported type
      */
     public User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -164,20 +162,20 @@ public class UserService {
 
             return userRepository.findByEmailWithRoles(email)
                     .orElseThrow(() -> new UsernameNotFoundException(
-                            "Usuario no encontrado con email: " + email));
+                            "User not found with email: " + email));
         }
 
         if (principal instanceof User user) {
             return userRepository.findByEmailWithRoles(user.getEmail())
                     .orElseThrow(() -> new UsernameNotFoundException(
-                            "Usuario no encontrado con email: " + user.getEmail()));
+                            "User not found with email: " + user.getEmail()));
         }
 
         if (principal == null) {
             throw new IllegalStateException("Authentication principal is null");
         }
 
-        throw new IllegalStateException("Tipo de principal no soportado: " + principal.getClass().getName());
+        throw new IllegalStateException("Unsupported principal type: " + principal.getClass().getName());
     }
 
     /**
@@ -505,8 +503,11 @@ public class UserService {
     }
 
     @Transactional
-    public void changePassword(String email, @Valid ChangePasswordRequestDTO requestDTO) {
-        User user = userRepository.findByEmail(email)
+    public void changePassword(@Valid ChangePasswordRequestDTO requestDTO) {
+        User currentUser = getCurrentUser();
+        String currentUserEmail = currentUser.getEmail();
+
+        User user = userRepository.findByEmail(currentUserEmail)
                 .orElseThrow(() -> new UserNotFoundException("User not found"));
 
         if (!passwordEncoder.matches(requestDTO.currentPassword(), user.getPassword())) {

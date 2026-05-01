@@ -99,7 +99,7 @@ public class AccommodationService {
         User currentUser = userService.getCurrentUser();
 
         if (currentUser.getRoles() == null || !currentUser.getRoles().contains(Role.HOST)) {
-            throw new UnauthorizedHostException("Solo los usuarios con rol HOST pueden registrar alojamientos.");
+            throw new UnauthorizedHostException("Only users with the HOST role can register hosting.");
         }
 
         Accommodation accommodation = accommodationMapper.toEntity(requestDTO);
@@ -118,7 +118,7 @@ public class AccommodationService {
     }
 
     /**
-     * Retrieves an active accommodation by its unique identifier.
+     * Retrieves active accommodation by its unique identifier.
      *
      * <p>This method fetches accommodation details for display purposes.
      * It only returns accommodations that have not been soft-deleted.
@@ -277,15 +277,17 @@ public class AccommodationService {
      * </table>
      *
      * @param id The unique identifier of the accommodation to deactivate
-     * @param requesterEmail The email of the authenticated user making the request
      * @throws AccommodationNotFoundException if no active accommodation exists with the given ID
      * @throws UnauthorizedHostException if the requester is not the host of the accommodation
      * @throws ActiveReservationsException if the accommodation has active future reservations
      */
     @Transactional
-    public void deactivateAccommodation(Long id, String requesterEmail) {
+    public void deactivateAccommodation(Long id) {
+        User currentUser = userService.getCurrentUser();
+        String email = currentUser.getEmail();
+
         log.info("Processing deactivation request for accommodation ID: {} by user: {}",
-                id, requesterEmail);
+                id, email);
 
         // 1. Retrieve and validate accommodation existence
         Accommodation accommodation = accommodationRepository
@@ -296,11 +298,10 @@ public class AccommodationService {
                 });
 
         // 2. Validate host ownership
-        if (!accommodation.getHost().getEmail().equals(requesterEmail)) {
+        if (!accommodation.getHost().getId().equals(currentUser.getId())) {
             log.warn("Deactivation denied: User {} attempted to deactivate accommodation {} owned by {}",
-                    requesterEmail, id, accommodation.getHost().getEmail());
-            throw new UnauthorizedHostException(
-                    "No tienes permisos para dar de baja esta casa rural.");
+                    email, id, accommodation.getHost().getEmail());
+            throw new UnauthorizedHostException("You do not have permissions to deactivate this rural house.");
         }
 
         // 3. Check for future active reservations
@@ -311,7 +312,7 @@ public class AccommodationService {
         if (hasFutureReservations) {
             log.warn("Deactivation blocked: Accommodation {} has active future reservations", id);
             throw new ActiveReservationsException(
-                    "No se puede dar de baja una casa con reservas futuras");
+                    "You cannot cancel a house with future reservations");
         }
 
         // 4. Perform soft deletion
@@ -319,7 +320,7 @@ public class AccommodationService {
         accommodation.setAvailable(false);
         accommodationRepository.save(accommodation);
 
-        log.info("Accommodation {} successfully deactivated by user {}", id, requesterEmail);
+        log.info("Accommodation {} successfully deactivated by user {}", id, email);
     }
 
     /*

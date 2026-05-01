@@ -59,6 +59,7 @@ public class ReviewController {
 
         log.info("POST /accommodations/{}/reviews - creating review", accommodationId);
         ReviewResponseDTO response = reviewService.createReview(accommodationId, createReviewRequestDTO);
+        log.info("Review created successfully with ID: {}", response.id());
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -131,6 +132,7 @@ public class ReviewController {
 
         log.info("POST /reviews/{}/response - answering review", reviewId);
         ReviewResponseDTO response = reviewService.respondToReview(reviewId, respondReviewRequestDTO);
+        log.info("Review answered successfully with ID: {}", response.id());
         return ResponseEntity.ok(response);
     }
 }

@@ -1,47 +1,56 @@
 package edu.uniquindio.stayhub_v2.service;
 
+import edu.uniquindio.stayhub_v2.dto.auth.ChangePasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.auth.ForgotPasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.auth.ResetPasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.auth.TokenResponseDTO;
-import edu.uniquindio.stayhub_v2.dto.auth.ChangePasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.user.UserLoginRequestDTO;
 import edu.uniquindio.stayhub_v2.exception.InvalidPasswordException;
 import edu.uniquindio.stayhub_v2.exception.InvalidRecoveryCodeException;
-import edu.uniquindio.stayhub_v2.mapper.UserMapper;
 import edu.uniquindio.stayhub_v2.model.User;
 import edu.uniquindio.stayhub_v2.repository.UserRepository;
 import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.Set;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import jakarta.validation.Validation;
-import jakarta.validation.Validator;
 
 @ExtendWith(MockitoExtension.class)
 public class UserServiceTest {
 
     @Mock
     private UserRepository userRepository;
-    @Mock
-    private UserMapper userMapper;
+
     @Mock
     private PasswordEncoder passwordEncoder;
+
     @Mock
     private JWTService jwtService;
+
     @Mock
     private EmailService emailService;
 
@@ -58,6 +67,11 @@ public class UserServiceTest {
                 .password("encoded_password")
                 .fullName("Test User")
                 .build();
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test
@@ -112,7 +126,8 @@ public class UserServiceTest {
         testUser.setPasswordRecoveryCode("123456");
         testUser.setPasswordRecoveryExpiration(LocalDateTime.now().plusMinutes(10));
 
-        ResetPasswordRequestDTO request = new ResetPasswordRequestDTO("test@mail.com", "123456", "NewPassword123!");
+        ResetPasswordRequestDTO request =
+                new ResetPasswordRequestDTO("test@mail.com", "123456", "NewPassword123!");
         when(userRepository.findByEmail(request.email())).thenReturn(Optional.of(testUser));
         when(passwordEncoder.encode(request.newPassword())).thenReturn("new_encoded_password");
 
@@ -130,12 +145,13 @@ public class UserServiceTest {
         testUser.setPasswordRecoveryCode("123456");
         testUser.setPasswordRecoveryExpiration(LocalDateTime.now().plusMinutes(10));
 
-        ResetPasswordRequestDTO request = new ResetPasswordRequestDTO("test@mail.com", "999999", "NewPassword123!");
+        ResetPasswordRequestDTO request =
+                new ResetPasswordRequestDTO("test@mail.com", "999999", "NewPassword123!");
         when(userRepository.findByEmail(request.email())).thenReturn(Optional.of(testUser));
 
         assertThatThrownBy(() -> userService.resetPassword(request))
                 .isInstanceOf(InvalidRecoveryCodeException.class)
-                .hasMessageContaining("inválido");
+                .hasMessageContaining("inv");
     }
 
     @Test
@@ -143,7 +159,8 @@ public class UserServiceTest {
         testUser.setPasswordRecoveryCode("123456");
         testUser.setPasswordRecoveryExpiration(LocalDateTime.now().minusMinutes(1));
 
-        ResetPasswordRequestDTO request = new ResetPasswordRequestDTO("test@mail.com", "123456", "NewPassword123!");
+        ResetPasswordRequestDTO request =
+                new ResetPasswordRequestDTO("test@mail.com", "123456", "NewPassword123!");
         when(userRepository.findByEmail(request.email())).thenReturn(Optional.of(testUser));
 
         assertThatThrownBy(() -> userService.resetPassword(request))
@@ -153,39 +170,97 @@ public class UserServiceTest {
 
     @Test
     void changePassword_ValidCurrentPassword_UpdatesPassword() {
-        ChangePasswordRequestDTO request = new ChangePasswordRequestDTO("OldPassword123!", "NewPassword123!");
-        when(userRepository.findByEmail(testUser.getEmail())).thenReturn(Optional.of(testUser));
-        when(passwordEncoder.matches(request.currentPassword(), testUser.getPassword())).thenReturn(true);
-        when(passwordEncoder.encode(request.newPassword())).thenReturn("new_encoded_password");
+        ChangePasswordRequestDTO request =
+                new ChangePasswordRequestDTO("OldPassword123!", "NewPassword123!");
 
-        userService.changePassword(testUser.getEmail(), request);
+        Authentication authentication = mock(Authentication.class);
+        SecurityContext securityContext = mock(SecurityContext.class);
+
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        when(authentication.isAuthenticated()).thenReturn(true);
+        when(authentication.getPrincipal()).thenReturn(testUser);
+
+        SecurityContextHolder.setContext(securityContext);
+
+        when(userRepository.findByEmailWithRoles(testUser.getEmail()))
+                .thenReturn(Optional.of(testUser));
+        when(userRepository.findByEmail(testUser.getEmail()))
+                .thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches(request.currentPassword(), testUser.getPassword()))
+                .thenReturn(true);
+        when(passwordEncoder.encode(request.newPassword()))
+                .thenReturn("new_encoded_password");
+
+        userService.changePassword(request);
 
         assertThat(testUser.getPassword()).isEqualTo("new_encoded_password");
+        verify(userRepository).findByEmailWithRoles(testUser.getEmail());
+        verify(userRepository).findByEmail(testUser.getEmail());
         verify(userRepository).save(testUser);
     }
 
     @Test
     void changePassword_InvalidCurrentPassword_ThrowsException() {
-        ChangePasswordRequestDTO request = new ChangePasswordRequestDTO("WrongPassword!", "NewPassword123!");
-        when(userRepository.findByEmail(testUser.getEmail())).thenReturn(Optional.of(testUser));
-        when(passwordEncoder.matches(request.currentPassword(), testUser.getPassword())).thenReturn(false);
+        ChangePasswordRequestDTO request =
+                new ChangePasswordRequestDTO("WrongPassword!", "NewPassword123!");
 
-        assertThatThrownBy(() -> userService.changePassword(testUser.getEmail(), request))
+        Authentication authentication = mock(Authentication.class);
+        SecurityContext securityContext = mock(SecurityContext.class);
+
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        when(authentication.isAuthenticated()).thenReturn(true);
+        when(authentication.getPrincipal()).thenReturn(testUser);
+
+        SecurityContextHolder.setContext(securityContext);
+
+        when(userRepository.findByEmailWithRoles(testUser.getEmail()))
+                .thenReturn(Optional.of(testUser));
+        when(userRepository.findByEmail(testUser.getEmail()))
+                .thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches(request.currentPassword(), testUser.getPassword()))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> userService.changePassword(request))
                 .isInstanceOf(InvalidPasswordException.class)
-                .hasMessageContaining("contraseña actual es incorrecta");
+                .hasMessageContaining("incorrecta");
+
+        verify(userRepository).findByEmailWithRoles(testUser.getEmail());
+        verify(userRepository).findByEmail(testUser.getEmail());
+        verify(passwordEncoder).matches("WrongPassword!", testUser.getPassword());
+        verify(passwordEncoder, never()).encode(anyString());
+        verify(userRepository, never()).save(any());
     }
 
     @Test
-    void changePassword_ValidCurrentPassword_UpdatesPassword2() {
-        ChangePasswordRequestDTO request = new ChangePasswordRequestDTO("OldPassword123!", "NuevaContraseña01!");
+    void changePassword_ValidCurrentPassword_WithUnicodeNewPassword_UpdatesPassword() {
+        ChangePasswordRequestDTO request =
+                new ChangePasswordRequestDTO("OldPassword123!", "NuevaContraseña01!");
 
-        when(userRepository.findByEmail(testUser.getEmail())).thenReturn(Optional.of(testUser));
-        when(passwordEncoder.matches(request.currentPassword(), testUser.getPassword())).thenReturn(true);
-        when(passwordEncoder.encode(request.newPassword())).thenReturn("new_encoded_password");
+        Authentication authentication = mock(Authentication.class);
+        SecurityContext securityContext = mock(SecurityContext.class);
 
-        userService.changePassword(testUser.getEmail(), request);
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        when(authentication.isAuthenticated()).thenReturn(true);
+        when(authentication.getPrincipal()).thenReturn(testUser);
+
+        SecurityContextHolder.setContext(securityContext);
+
+        when(userRepository.findByEmailWithRoles(testUser.getEmail()))
+                .thenReturn(Optional.of(testUser));
+        when(userRepository.findByEmail(testUser.getEmail()))
+                .thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches(request.currentPassword(), testUser.getPassword()))
+                .thenReturn(true);
+        when(passwordEncoder.encode(request.newPassword()))
+                .thenReturn("new_encoded_password");
+
+        userService.changePassword(request);
 
         assertThat(testUser.getPassword()).isEqualTo("new_encoded_password");
+        verify(userRepository).findByEmailWithRoles(testUser.getEmail());
+        verify(userRepository).findByEmail(testUser.getEmail());
+        verify(passwordEncoder).matches("OldPassword123!", "encoded_password");
+        verify(passwordEncoder).encode("NuevaContraseña01!");
         verify(userRepository).save(testUser);
     }
 
@@ -194,7 +269,8 @@ public class UserServiceTest {
         ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
         Validator validator = factory.getValidator();
 
-        ChangePasswordRequestDTO dto = new ChangePasswordRequestDTO("OldPassword123!", "NuevaContraseña01!");
+        ChangePasswordRequestDTO dto =
+                new ChangePasswordRequestDTO("OldPassword123!", "NuevaContraseña01!");
 
         Set<ConstraintViolation<ChangePasswordRequestDTO>> violations = validator.validate(dto);
 
@@ -212,5 +288,4 @@ public class UserServiceTest {
 
         assertThat(violations).isNotEmpty();
     }
-
 }

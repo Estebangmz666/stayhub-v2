@@ -243,6 +243,7 @@ public class BookingController {
 
         log.info("PATCH /bookings/{}/cancel - cancelling reservation", reservationId);
         RetrieveReservationResponseDTO response = reservationService.cancelReservation(reservationId);
+        log.info("Reservation with id: {} cancelled successfully", response.id());
         return ResponseEntity.ok(response);
     }
 
@@ -263,6 +264,7 @@ public class BookingController {
 
         log.info("PATCH /bookings/{}/deposit-paid - marking deposit as paid", reservationId);
         RetrieveReservationResponseDTO response = reservationService.markDepositAsPaid(reservationId);
+        log.info("Deposit marked as paid for reservation with id: {}", response.id());
         return ResponseEntity.ok(response);
     }
 }

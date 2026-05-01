@@ -9,7 +9,6 @@ import edu.uniquindio.stayhub_v2.dto.user.UserLoginRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.user.UserSignupRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.user.UserSignupResponseDTO;
 import edu.uniquindio.stayhub_v2.service.UserService;
-import edu.uniquindio.stayhub_v2.service.JWTService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -26,7 +25,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -37,7 +35,6 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 public class UserController {
     private final UserService userService;
-    private final JWTService jwtService;
 
     @Operation(summary = "Register a new user", description = "Registers a new user with the provided details")
     @ApiResponses(value = {
@@ -176,11 +173,9 @@ public class UserController {
     })
     @PutMapping("auth/change-password")
     public ResponseEntity<MessageResponseDTO> changePassword(
-            @Valid @RequestBody ChangePasswordRequestDTO requestDTO,
-            @RequestHeader("Authorization") String token) {
+            @Valid @RequestBody ChangePasswordRequestDTO requestDTO) {
         log.info("Processing change password request");
-        String requesterEmail = jwtService.getEmailFromToken(token);
-        userService.changePassword(requesterEmail, requestDTO);
-        return new ResponseEntity<>(new MessageResponseDTO("Contraseña cambiada exitosamente"), HttpStatus.OK);
+        userService.changePassword(requestDTO);
+        return new ResponseEntity<>(new MessageResponseDTO("Password changed successfully"), HttpStatus.OK);
     }
 }

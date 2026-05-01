@@ -59,20 +59,22 @@ public class AccommodationServiceTest {
 
         private Accommodation testAccommodation;
 
+        private User hostUser;
+
         @BeforeEach
         void setUp() {
-                User hostUser = User.builder()
-                                .id(1L)
-                                .email("host@example.com")
-                                .roles(Set.of(Role.HOST))
-                                .build();
+                hostUser = User.builder()
+                        .id(1L)
+                        .email("host@example.com")
+                        .roles(Set.of(Role.HOST))
+                        .build();
 
                 testAccommodation = Accommodation.builder()
-                                .id(100L)
-                                .host(hostUser)
-                                .deleted(false)
-                                .available(true)
-                                .build();
+                        .id(100L)
+                        .host(hostUser)
+                        .deleted(false)
+                        .available(true)
+                        .build();
         }
 
         @Test
@@ -185,7 +187,7 @@ public class AccommodationServiceTest {
 
                 assertThatThrownBy(() -> accommodationService.createAccommodation(requestDTO))
                                 .isInstanceOf(UnauthorizedHostException.class)
-                                .hasMessageContaining("rol HOST");
+                                .hasMessageContaining("HOST role");
 
                 verify(accommodationMapper, never()).toEntity(any());
                 verify(accommodationRepository, never()).save(any());
@@ -193,51 +195,108 @@ public class AccommodationServiceTest {
 
         @Test
         void deactivateAccommodation_Successful() {
-                when(accommodationRepository.findByIdAndDeletedFalse(100L)).thenReturn(Optional.of(testAccommodation));
-                when(reservationRepository.existsByAccommodationIdAndStartDateAfterAndStatus(
-                                eq(100L), any(LocalDateTime.class), eq(ReservationStatus.ACTIVE))).thenReturn(false);
+                when(userService.getCurrentUser()).thenReturn(hostUser);
 
-                accommodationService.deactivateAccommodation(100L, "host@example.com");
+                when(accommodationRepository.findByIdAndDeletedFalse(100L))
+                        .thenReturn(Optional.of(testAccommodation));
+
+                when(reservationRepository.existsByAccommodationIdAndStartDateAfterAndStatus(
+                        eq(100L),
+                        any(LocalDateTime.class),
+                        eq(ReservationStatus.ACTIVE)
+                )).thenReturn(false);
+
+                accommodationService.deactivateAccommodation(100L);
 
                 assertThat(testAccommodation.isDeleted()).isTrue();
                 assertThat(testAccommodation.isAvailable()).isFalse();
+
+                verify(userService).getCurrentUser();
+                verify(accommodationRepository).findByIdAndDeletedFalse(100L);
+                verify(reservationRepository).existsByAccommodationIdAndStartDateAfterAndStatus(
+                        eq(100L),
+                        any(LocalDateTime.class),
+                        eq(ReservationStatus.ACTIVE)
+                );
                 verify(accommodationRepository).save(testAccommodation);
         }
 
         @Test
         void deactivateAccommodation_UnauthorizedHost_ThrowsException() {
-                when(accommodationRepository.findByIdAndDeletedFalse(100L)).thenReturn(Optional.of(testAccommodation));
+                User otherUser = new User();
+                otherUser.setId(999L);
+                otherUser.setEmail("otheruser@example.com");
 
-                assertThatThrownBy(() -> accommodationService.deactivateAccommodation(100L, "otheruser@example.com"))
-                                .isInstanceOf(UnauthorizedHostException.class)
-                                .hasMessageContaining("No tienes permisos para dar de baja esta casa rural.");
+                when(userService.getCurrentUser()).thenReturn(otherUser);
+
+                when(accommodationRepository.findByIdAndDeletedFalse(100L))
+                        .thenReturn(Optional.of(testAccommodation));
+
+                assertThatThrownBy(() -> accommodationService.deactivateAccommodation(100L))
+                        .isInstanceOf(UnauthorizedHostException.class)
+                        .hasMessageContaining("You do not have permissions to deactivate this rural house.");
 
                 assertThat(testAccommodation.isDeleted()).isFalse();
-                verify(reservationRepository, never()).existsByAccommodationIdAndStartDateAfterAndStatus(any(), any(),
-                                any());
+
+                verify(userService).getCurrentUser();
+                verify(accommodationRepository).findByIdAndDeletedFalse(100L);
+                verify(reservationRepository, never()).existsByAccommodationIdAndStartDateAfterAndStatus(
+                        any(),
+                        any(),
+                        any()
+                );
                 verify(accommodationRepository, never()).save(any());
         }
 
         @Test
         void deactivateAccommodation_ActiveReservationsExist_ThrowsException() {
-                when(accommodationRepository.findByIdAndDeletedFalse(100L)).thenReturn(Optional.of(testAccommodation));
-                when(reservationRepository.existsByAccommodationIdAndStartDateAfterAndStatus(
-                                eq(100L), any(LocalDateTime.class), eq(ReservationStatus.ACTIVE))).thenReturn(true);
+                when(userService.getCurrentUser()).thenReturn(hostUser);
 
-                assertThatThrownBy(() -> accommodationService.deactivateAccommodation(100L, "host@example.com"))
-                                .isInstanceOf(ActiveReservationsException.class)
-                                .hasMessageContaining("reservas futuras");
+                when(accommodationRepository.findByIdAndDeletedFalse(100L))
+                        .thenReturn(Optional.of(testAccommodation));
+
+                when(reservationRepository.existsByAccommodationIdAndStartDateAfterAndStatus(
+                        eq(100L),
+                        any(LocalDateTime.class),
+                        eq(ReservationStatus.ACTIVE)
+                )).thenReturn(true);
+
+                assertThatThrownBy(() -> accommodationService.deactivateAccommodation(100L))
+                        .isInstanceOf(ActiveReservationsException.class)
+                        .hasMessageContaining("future reservations");
 
                 assertThat(testAccommodation.isDeleted()).isFalse();
+                assertThat(testAccommodation.isAvailable()).isTrue();
+
+                verify(userService).getCurrentUser();
+                verify(accommodationRepository).findByIdAndDeletedFalse(100L);
+                verify(reservationRepository).existsByAccommodationIdAndStartDateAfterAndStatus(
+                        eq(100L),
+                        any(LocalDateTime.class),
+                        eq(ReservationStatus.ACTIVE)
+                );
                 verify(accommodationRepository, never()).save(any());
         }
 
         @Test
         void deactivateAccommodation_NotFound_ThrowsException() {
-                when(accommodationRepository.findByIdAndDeletedFalse(999L)).thenReturn(Optional.empty());
+                when(userService.getCurrentUser()).thenReturn(hostUser);
 
-                assertThatThrownBy(() -> accommodationService.deactivateAccommodation(999L, "host@example.com"))
-                                .isInstanceOf(AccommodationNotFoundException.class);
+                when(accommodationRepository.findByIdAndDeletedFalse(999L))
+                        .thenReturn(Optional.empty());
+
+                assertThatThrownBy(() -> accommodationService.deactivateAccommodation(999L))
+                        .isInstanceOf(AccommodationNotFoundException.class)
+                        .hasMessageContaining("Accommodation not found with id: 999");
+
+                verify(userService).getCurrentUser();
+                verify(accommodationRepository).findByIdAndDeletedFalse(999L);
+                verify(reservationRepository, never()).existsByAccommodationIdAndStartDateAfterAndStatus(
+                        any(),
+                        any(),
+                        any()
+                );
+                verify(accommodationRepository, never()).save(any());
         }
 
         @Test
