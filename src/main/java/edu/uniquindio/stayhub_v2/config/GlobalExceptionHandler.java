@@ -2,6 +2,7 @@ package edu.uniquindio.stayhub_v2.config;
 
 import edu.uniquindio.stayhub_v2.dto.auth.Error;
 import edu.uniquindio.stayhub_v2.exception.*;
+import edu.uniquindio.stayhub_v2.exception.RentalPackageNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.support.DefaultMessageSourceResolvable;
 import org.springframework.http.HttpStatus;
@@ -243,6 +244,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ReservationNotFoundException.class)
     public ResponseEntity<Error> handleReservationNotFoundException(ReservationNotFoundException e) {
         log.warn("Reservation not found: {}", e.getMessage());
+        return new ResponseEntity<>(
+                new Error(e.getMessage(), HttpStatus.NOT_FOUND.value()),
+                HttpStatus.NOT_FOUND
+        );
+    }
+
+    @ExceptionHandler(RentalPackageNotFoundException.class)
+    public ResponseEntity<Error> handleRentalPackageNotFoundException(RentalPackageNotFoundException e) {
+        log.warn("Rental package not found: {}", e.getMessage());
         return new ResponseEntity<>(
                 new Error(e.getMessage(), HttpStatus.NOT_FOUND.value()),
                 HttpStatus.NOT_FOUND
