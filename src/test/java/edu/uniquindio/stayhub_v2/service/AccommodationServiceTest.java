@@ -6,6 +6,7 @@ import edu.uniquindio.stayhub_v2.exception.UnauthorizedHostException;
 import edu.uniquindio.stayhub_v2.dto.accommodation.AccommodationGetByIdResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.accommodation.CreateAccommodationRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.accommodation.CreateAccommodationResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.accommodation.UnavailableAccommodationDateRangeResponseDTO;
 import edu.uniquindio.stayhub_v2.mapper.AccommodationMapper;
 import edu.uniquindio.stayhub_v2.model.Accommodation;
 import edu.uniquindio.stayhub_v2.model.Role;
@@ -373,5 +374,54 @@ public class AccommodationServiceTest {
                 assertThatThrownBy(() -> accommodationService.searchAccommodationsByCity("Armenia", 0, 51))
                                 .isInstanceOf(IllegalArgumentException.class)
                                 .hasMessageContaining("Size must be between 1 and 50");
+        }
+
+        @Test
+        void getUnavailableDateRanges_ExistingAccommodation_ReturnsActiveBlockedRanges() {
+                UnavailableAccommodationDateRangeResponseDTO blockedRange =
+                                new UnavailableAccommodationDateRangeResponseDTO(
+                                                LocalDateTime.of(2026, 6, 10, 15, 0),
+                                                LocalDateTime.of(2026, 6, 13, 11, 0)
+                                );
+
+                when(accommodationRepository.findByIdAndDeletedFalse(100L))
+                                .thenReturn(Optional.of(testAccommodation));
+                when(reservationRepository.findUnavailableDateRangesByAccommodationId(
+                                eq(100L),
+                                any(Pageable.class)))
+                                .thenReturn(new PageImpl<>(List.of(blockedRange)));
+
+                Page<UnavailableAccommodationDateRangeResponseDTO> response =
+                                accommodationService.getUnavailableDateRanges(100L, 0, 10);
+
+                assertThat(response.getContent()).hasSize(1);
+                assertThat(response.getContent().getFirst().startDate())
+                                .isEqualTo(LocalDateTime.of(2026, 6, 10, 15, 0));
+                assertThat(response.getContent().getFirst().endDate())
+                                .isEqualTo(LocalDateTime.of(2026, 6, 13, 11, 0));
+
+                verify(reservationRepository).findUnavailableDateRangesByAccommodationId(
+                                eq(100L),
+                                any(Pageable.class));
+        }
+
+        @Test
+        void getUnavailableDateRanges_AccommodationNotFound_ThrowsException() {
+                when(accommodationRepository.findByIdAndDeletedFalse(999L))
+                                .thenReturn(Optional.empty());
+
+                assertThatThrownBy(() -> accommodationService.getUnavailableDateRanges(999L, 0, 10))
+                                .isInstanceOf(AccommodationNotFoundException.class)
+                                .hasMessageContaining("Accommodation not found with id: 999");
+
+                verify(reservationRepository, never())
+                                .findUnavailableDateRangesByAccommodationId(any(), any(Pageable.class));
+        }
+
+        @Test
+        void getUnavailableDateRanges_InvalidAccommodationId_ThrowsIllegalArgumentException() {
+                assertThatThrownBy(() -> accommodationService.getUnavailableDateRanges(0L, 0, 10))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("Accommodation ID must be positive");
         }
 }

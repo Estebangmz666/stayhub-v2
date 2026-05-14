@@ -4,6 +4,7 @@ import edu.uniquindio.stayhub_v2.dto.accommodation.AccommodationGetByIdResponseD
 import edu.uniquindio.stayhub_v2.dto.accommodation.AccommodationSearchByCityResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.accommodation.CreateAccommodationRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.accommodation.CreateAccommodationResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.accommodation.UnavailableAccommodationDateRangeResponseDTO;
 import edu.uniquindio.stayhub_v2.exception.AccommodationNotFoundException;
 import edu.uniquindio.stayhub_v2.mapper.AccommodationMapper;
 import edu.uniquindio.stayhub_v2.model.Accommodation;
@@ -211,6 +212,42 @@ public class AccommodationService {
                         accommodation.getCurrency().getCurrencyCode(),
                         accommodation.getMainImage()
                 ));
+    }
+
+    @Transactional(readOnly = true)
+    public Page<UnavailableAccommodationDateRangeResponseDTO> getUnavailableDateRanges(
+            Long accommodationId,
+            int page,
+            int size) {
+
+        if (accommodationId == null || accommodationId <= 0) {
+            throw new IllegalArgumentException("Accommodation ID must be positive");
+        }
+        if (page < 0) {
+            throw new IllegalArgumentException("Page must be zero or greater");
+        }
+        if (size < 1 || size > 50) {
+            throw new IllegalArgumentException("Size must be between 1 and 50");
+        }
+
+        accommodationRepository.findByIdAndDeletedFalse(accommodationId)
+                .orElseThrow(() -> new AccommodationNotFoundException(
+                        "Accommodation not found with id: " + accommodationId
+                ));
+
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Direction.ASC, "startDate")
+        );
+
+        log.info("Retrieving unavailable date ranges for accommodation {} page {} size {}",
+                accommodationId, page, size);
+
+        return reservationRepository.findUnavailableDateRangesByAccommodationId(
+                accommodationId,
+                pageable
+        );
     }
 
     /**

@@ -17,6 +17,8 @@ tags:
     description: Reservation creation and reservation management endpoints.
   - name: Reviews
     description: Guest review creation, review listing and host response endpoints.
+  - name: Host metrics
+    description: Host performance analytics endpoints by accommodation and stay period.
   - name: Notifications
     description: In-app notifications for pending reservation deposits.
 paths:
@@ -348,6 +350,71 @@ paths:
                 $ref: '#/components/schemas/Error'
         '403':
           description: Authenticated user is not the owner of the accommodation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Accommodation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v2/accommodations/{id}/unavailable-dates:
+    get:
+      tags:
+        - Accommodations
+      summary: Get unavailable accommodation dates
+      description: |
+        Returns a paginated list of blocked date ranges for the given accommodation.
+
+        Only reservations with `ACTIVE` status are included because those are the intervals
+        that currently make the accommodation unavailable for new bookings.
+      operationId: getUnavailableAccommodationDates
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: Accommodation identifier.
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        - in: query
+          name: page
+          required: false
+          description: Zero-based page number.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - in: query
+          name: size
+          required: false
+          description: Page size.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        '200':
+          description: Unavailable dates retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnavailableAccommodationDateRangePage'
+        '400':
+          description: Invalid accommodation ID, page or size parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized, valid JWT token required
           content:
             application/json:
               schema:
@@ -1059,6 +1126,78 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /api/v2/hosts/me/accommodations/metrics:
+    get:
+      tags:
+        - Host metrics
+      summary: Get accommodation metrics by stay period
+      description: |
+        Returns paginated performance metrics for accommodations owned by the authenticated host.
+
+        The requested period is evaluated using reservation stay overlap instead of reservation creation time.
+      operationId: getAccommodationMetricsByPeriod
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: startDate
+          required: true
+          description: Inclusive start date of the requested stay period.
+          schema:
+            type: string
+            format: date
+            example: '2026-05-01'
+        - in: query
+          name: endDate
+          required: true
+          description: Inclusive end date of the requested stay period.
+          schema:
+            type: string
+            format: date
+            example: '2026-05-31'
+        - in: query
+          name: page
+          required: false
+          description: Zero-based page number.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - in: query
+          name: size
+          required: false
+          description: Page size.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        '200':
+          description: Host accommodation metrics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostAccommodationMetricsPage'
+        '400':
+          description: Invalid date range, page or size parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized, valid JWT token required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated user does not have HOST role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/v2/notifications/payment-pending:
     get:
       tags:
@@ -1622,6 +1761,50 @@ components:
       required:
         - content
 
+    UnavailableAccommodationDateRangeResponse:
+      type: object
+      properties:
+        startDate:
+          type: string
+          format: date-time
+          example: '2026-06-10T15:00:00'
+        endDate:
+          type: string
+          format: date-time
+          example: '2026-06-13T11:00:00'
+      required:
+        - startDate
+        - endDate
+
+    UnavailableAccommodationDateRangePage:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/UnavailableAccommodationDateRangeResponse'
+        pageable:
+          type: object
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        size:
+          type: integer
+        number:
+          type: integer
+        numberOfElements:
+          type: integer
+        first:
+          type: boolean
+        last:
+          type: boolean
+        empty:
+          type: boolean
+      required:
+        - content
+
     CreateReservationRequest:
       type: object
       properties:
@@ -1844,6 +2027,92 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/RetrieveReservationSummaryResponse'
+        pageable:
+          type: object
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        size:
+          type: integer
+        number:
+          type: integer
+        numberOfElements:
+          type: integer
+        first:
+          type: boolean
+        last:
+          type: boolean
+        empty:
+          type: boolean
+      required:
+        - content
+
+    HostAccommodationMetricsResponse:
+      type: object
+      properties:
+        accommodationId:
+          type: integer
+          format: int64
+          example: 15
+        accommodationTitle:
+          type: string
+          example: Cabana familiar con vista al valle
+        city:
+          type: string
+          example: Armenia
+        currency:
+          type: string
+          example: COP
+        totalReservationsInPeriod:
+          type: integer
+          format: int64
+          example: 8
+        activeReservationsInPeriod:
+          type: integer
+          format: int64
+          example: 5
+        cancelledReservationsInPeriod:
+          type: integer
+          format: int64
+          example: 3
+        reservedRevenueInPeriod:
+          type: number
+          format: double
+          example: 1440000.00
+        paidDepositsCountInPeriod:
+          type: integer
+          format: int64
+          example: 4
+        paidDepositsAmountInPeriod:
+          type: number
+          format: double
+          example: 288000.00
+        averageRating:
+          type: number
+          format: double
+          nullable: true
+          example: 4.7
+      required:
+        - accommodationId
+        - accommodationTitle
+        - city
+        - currency
+        - totalReservationsInPeriod
+        - activeReservationsInPeriod
+        - cancelledReservationsInPeriod
+        - reservedRevenueInPeriod
+        - paidDepositsCountInPeriod
+        - paidDepositsAmountInPeriod
+
+    HostAccommodationMetricsPage:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/HostAccommodationMetricsResponse'
         pageable:
           type: object
         totalElements:

@@ -1,5 +1,6 @@
 package edu.uniquindio.stayhub_v2.repository;
 
+import edu.uniquindio.stayhub_v2.dto.accommodation.UnavailableAccommodationDateRangeResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryProjectionDTO;
 import edu.uniquindio.stayhub_v2.model.Reservation;
 import edu.uniquindio.stayhub_v2.model.ReservationStatus;
@@ -371,6 +372,21 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     )
     Page<RetrieveReservationSummaryProjectionDTO> findSummaryByGuestOrHostId(
             @Param("userId") Long userId,
+            Pageable pageable
+    );
+
+    @Query("""
+    SELECT new edu.uniquindio.stayhub_v2.dto.accommodation.UnavailableAccommodationDateRangeResponseDTO(
+        r.startDate,
+        r.endDate
+    )
+    FROM Reservation r
+    WHERE r.accommodation.id = :accommodationId
+    AND r.status = 'ACTIVE'
+    ORDER BY r.startDate ASC
+""")
+    Page<UnavailableAccommodationDateRangeResponseDTO> findUnavailableDateRangesByAccommodationId(
+            @Param("accommodationId") Long accommodationId,
             Pageable pageable
     );
 

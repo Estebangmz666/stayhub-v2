@@ -4,6 +4,7 @@ import edu.uniquindio.stayhub_v2.dto.accommodation.AccommodationGetByIdResponseD
 import edu.uniquindio.stayhub_v2.dto.accommodation.AccommodationSearchByCityResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.accommodation.CreateAccommodationRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.accommodation.CreateAccommodationResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.accommodation.UnavailableAccommodationDateRangeResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.auth.MessageResponseDTO;
 import edu.uniquindio.stayhub_v2.service.AccommodationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -147,6 +148,41 @@ public class AccommodationController {
         AccommodationGetByIdResponseDTO response = accommodationService.getAccommodation(id);
         log.debug("Accommodation retrieved successfully with title: {}", response.title());
         return new ResponseEntity<>(response, HttpStatus.OK);
+    }
+
+    @Operation(
+            summary = "Get unavailable accommodation dates",
+            description = "Returns a paginated list of blocked date ranges for the given accommodation. " +
+                    "Only ACTIVE reservations are included because those are the intervals that currently block new bookings."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Unavailable dates retrieved successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid accommodation ID, page or size parameter"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized, valid JWT token required"),
+            @ApiResponse(responseCode = "404", description = "Accommodation not found")
+    })
+    @GetMapping("/{id}/unavailable-dates")
+    public ResponseEntity<Page<UnavailableAccommodationDateRangeResponseDTO>> getUnavailableDateRanges(
+            @PathVariable
+            @Min(value = 1, message = "Accommodation ID must be positive")
+            @Parameter(description = "Accommodation ID", required = true, example = "15")
+            Long id,
+
+            @RequestParam(defaultValue = "0")
+            @Min(value = 0, message = "Page must be zero or greater")
+            @Parameter(description = "Zero-based page number", example = "0")
+            int page,
+
+            @RequestParam(defaultValue = "10")
+            @Min(value = 1, message = "Size must be at least 1")
+            @Max(value = 50, message = "Size must be at most 50")
+            @Parameter(description = "Page size", example = "10")
+            int size) {
+
+        log.info("Retrieving unavailable dates for accommodation {} page {} size {}", id, page, size);
+        Page<UnavailableAccommodationDateRangeResponseDTO> response =
+                accommodationService.getUnavailableDateRanges(id, page, size);
+        return ResponseEntity.ok(response);
     }
 
     @Operation(

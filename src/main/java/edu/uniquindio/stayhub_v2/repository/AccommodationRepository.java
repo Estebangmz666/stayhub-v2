@@ -1,5 +1,6 @@
 package edu.uniquindio.stayhub_v2.repository;
 
+import edu.uniquindio.stayhub_v2.dto.host.HostAccommodationMetricsProjection;
 import edu.uniquindio.stayhub_v2.model.Accommodation;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
@@ -10,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
+import java.time.LocalDateTime;
 
 /**
  * Repository interface for managing {@link Accommodation} entities.
@@ -123,6 +125,63 @@ public interface AccommodationRepository extends JpaRepository<Accommodation, Lo
     Page<Accommodation> findByCityContainingIgnoreCaseAndDeletedFalseAndAvailableTrue(
             String city,
             Pageable pageable);
+
+    @Query(
+            value = """
+            SELECT
+                a.id AS "accommodationId",
+                a.title AS "accommodationTitle",
+                a.city AS "city",
+                a.currency AS "currency",
+                COALESCE(reservation_metrics.total_reservations_in_period, 0) AS "totalReservationsInPeriod",
+                COALESCE(reservation_metrics.active_reservations_in_period, 0) AS "activeReservationsInPeriod",
+                COALESCE(reservation_metrics.cancelled_reservations_in_period, 0) AS "cancelledReservationsInPeriod",
+                COALESCE(reservation_metrics.reserved_revenue_in_period, 0) AS "reservedRevenueInPeriod",
+                COALESCE(reservation_metrics.paid_deposits_count_in_period, 0) AS "paidDepositsCountInPeriod",
+                COALESCE(reservation_metrics.paid_deposits_amount_in_period, 0) AS "paidDepositsAmountInPeriod",
+                review_metrics.average_rating AS "averageRating"
+            FROM accommodations a
+            LEFT JOIN (
+                SELECT
+                    r.accommodation_id,
+                    COUNT(*) AS total_reservations_in_period,
+                    SUM(CASE WHEN r.status = 'ACTIVE' THEN 1 ELSE 0 END) AS active_reservations_in_period,
+                    SUM(CASE WHEN r.status = 'CANCELLED' THEN 1 ELSE 0 END) AS cancelled_reservations_in_period,
+                    COALESCE(SUM(r.total_price), 0) AS reserved_revenue_in_period,
+                    SUM(CASE WHEN r.deposit_paid = TRUE THEN 1 ELSE 0 END) AS paid_deposits_count_in_period,
+                    COALESCE(SUM(CASE WHEN r.deposit_paid = TRUE THEN r.deposit_amount ELSE 0 END), 0) AS paid_deposits_amount_in_period
+                FROM reservations r
+                WHERE r.start_date < :periodEndExclusive
+                  AND r.end_date >= :periodStart
+                GROUP BY r.accommodation_id
+            ) reservation_metrics
+                ON reservation_metrics.accommodation_id = a.id
+            LEFT JOIN (
+                SELECT
+                    rv.accommodation_id,
+                    CAST(AVG(rv.rating) AS DOUBLE PRECISION) AS average_rating
+                FROM reviews rv
+                GROUP BY rv.accommodation_id
+            ) review_metrics
+                ON review_metrics.accommodation_id = a.id
+            WHERE a.host_id = :hostId
+              AND a.deleted = FALSE
+            ORDER BY a.title
+            """,
+            countQuery = """
+            SELECT COUNT(*)
+            FROM accommodations a
+            WHERE a.host_id = :hostId
+              AND a.deleted = FALSE
+            """,
+            nativeQuery = true
+    )
+    Page<HostAccommodationMetricsProjection> findHostAccommodationMetricsByPeriod(
+            @Param("hostId") Long hostId,
+            @Param("periodStart") LocalDateTime periodStart,
+            @Param("periodEndExclusive") LocalDateTime periodEndExclusive,
+            Pageable pageable
+    );
 
     /*
      * Additional query methods that could be added in the future:

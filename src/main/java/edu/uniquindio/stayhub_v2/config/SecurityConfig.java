@@ -1,6 +1,7 @@
 package edu.uniquindio.stayhub_v2.config;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -22,7 +23,7 @@ import java.util.List;
 /**
  * Security configuration class for the StayHub application.
  *
- * <p>This class configures all security-related aspects of the application including:
+ * <p>This class configures all security-related aspects of the application, including:
  * <ul>
  *   <li>JWT-based stateless authentication</li>
  *   <li>Password encoding using BCrypt</li>
@@ -64,6 +65,9 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @Value("${stayhub.frontend.url}")
+    private String frontendUrl;
 
     /**
      * Provides a password encoder bean for secure password hashing.
@@ -189,10 +193,11 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        // Frontend origins allowed to access the API
+        // Frontend origins allowed accessing the API
         config.setAllowedOrigins(List.of(
                 "http://localhost:3000",
-                "http://127.0.0.1:3000"
+                "http://127.0.0.1:3000",
+                frontendUrl
         ));
 
         // HTTP methods allowed for cross-origin requests
