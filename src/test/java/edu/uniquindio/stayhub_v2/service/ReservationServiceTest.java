@@ -8,6 +8,7 @@ import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.UpdateReservationRequestDTO;
 import edu.uniquindio.stayhub_v2.event.ReservationCancelledEvent;
+import edu.uniquindio.stayhub_v2.event.ReservationCompletedEvent;
 import edu.uniquindio.stayhub_v2.event.ReservationCreatedEvent;
 import edu.uniquindio.stayhub_v2.exception.AccommodationNotFoundException;
 import edu.uniquindio.stayhub_v2.exception.DepositNotPaidException;
@@ -793,5 +794,26 @@ class ReservationServiceTest {
         assertThat(cancelledCount).isEqualTo(1);
         assertThat(expired.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
         verify(applicationEventPublisher, times(1)).publishEvent(any(ReservationCancelledEvent.class));
+    }
+
+    @Test
+    void completePastReservations_CompletesReservationsAndPublishesCompletedEvent() {
+        Reservation completedCandidate = new Reservation();
+        completedCandidate.setId(400L);
+        completedCandidate.setStatus(ReservationStatus.ACTIVE);
+        completedCandidate.setGuest(guest);
+        completedCandidate.setAccommodation(accommodation);
+        completedCandidate.setEndDate(LocalDateTime.now().minusDays(1));
+
+        when(reservationRepository.findReservationsToComplete(any()))
+                .thenReturn(List.of(completedCandidate));
+        when(reservationRepository.save(any(Reservation.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        int completedCount = reservationService.completePastReservations();
+
+        assertThat(completedCount).isEqualTo(1);
+        assertThat(completedCandidate.getStatus()).isEqualTo(ReservationStatus.COMPLETED);
+        verify(applicationEventPublisher).publishEvent(any(ReservationCompletedEvent.class));
     }
 }

@@ -283,6 +283,13 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
 """)
     List<Reservation> findExpiredUnpaidReservations(@Param("now") LocalDateTime now);
 
+    @Query("""
+    SELECT r FROM Reservation r
+    WHERE r.status = 'ACTIVE'
+    AND r.endDate < :now
+""")
+    List<Reservation> findReservationsToComplete(@Param("now") LocalDateTime now);
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
     UPDATE Reservation r
@@ -401,14 +408,6 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
      *
      * // Find active reservations for a guest
      * List<Reservation> findByGuestIdAndStatus(Long guestId, ReservationStatus status);
-     *
-     * // Find reservations that need to be auto-completed
-     * @Query("""
-     *     SELECT r FROM Reservation r
-     *     WHERE r.status = 'ACTIVE'
-     *     AND r.endDate < :now
-     * """)
-     * List<Reservation> findReservationsToComplete(@Param("now") LocalDateTime now);
      *
      * // Count reservations by status for an accommodation
      * long countByAccommodationIdAndStatus(Long accommodationId, ReservationStatus status);

@@ -1,7 +1,9 @@
 package edu.uniquindio.stayhub_v2.mapper;
 
+import edu.uniquindio.stayhub_v2.dto.user.UserProfileResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.user.UserSignupRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.user.UserSignupResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.user.profileUpdate.UserProfileUpdateResponseDTO;
 import edu.uniquindio.stayhub_v2.model.User;
 import org.mapstruct.Mapper;
 
@@ -99,4 +101,8 @@ public interface UserMapper {
      * @return UserSignupResponseDTO containing safe, non-sensitive user data
      */
     UserSignupResponseDTO toSignupResponseDTO(User user);
+
+    UserProfileResponseDTO toUserProfileResponseDTO(User user);
+
+    UserProfileUpdateResponseDTO toUserProfileUpdateResponseDTO(User user);
 }

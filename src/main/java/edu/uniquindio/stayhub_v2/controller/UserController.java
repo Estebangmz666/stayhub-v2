@@ -6,8 +6,11 @@ import edu.uniquindio.stayhub_v2.dto.auth.ResetPasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.auth.TokenResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.auth.ChangePasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.user.UserLoginRequestDTO;
+import edu.uniquindio.stayhub_v2.dto.user.UserProfileResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.user.UserSignupRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.user.UserSignupResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.user.profileUpdate.UserProfileUpdateRequestDTO;
+import edu.uniquindio.stayhub_v2.dto.user.profileUpdate.UserProfileUpdateResponseDTO;
 import edu.uniquindio.stayhub_v2.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -16,17 +19,15 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "User Management", description = "Endpoints for managing users")
 @RestController
@@ -177,5 +178,155 @@ public class UserController {
         log.info("Processing change password request");
         userService.changePassword(requestDTO);
         return new ResponseEntity<>(new MessageResponseDTO("Password changed successfully"), HttpStatus.OK);
+    }
+
+    @Operation(
+            summary = "Get authenticated user profile",
+            description = """
+                Retrieves the profile information of the currently authenticated user.
+
+                This endpoint requires a valid JWT Bearer token. The authenticated user is resolved
+                from the Spring Security context, then the corresponding user entity is loaded from
+                the database with its roles and mapped to a profile response DTO.
+
+                Authentication flow:
+                1. The JWT filter validates the token.
+                2. The authenticated principal is stored in the SecurityContext.
+                3. The service resolves the current user from the SecurityContext.
+                4. The user profile is returned as a UserProfileResponseDTO.
+
+                This endpoint does not receive request parameters or a request body.
+                """,
+            security = {
+                    @SecurityRequirement(name = "bearerAuth")
+            }
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Authenticated user profile retrieved successfully",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = UserProfileResponseDTO.class),
+                            examples = @ExampleObject(
+                                    name = "Successful response",
+                                    summary = "Authenticated user profile",
+                                    value = """
+                                        {
+                                          "id": 1,
+                                          "firstName": "John",
+                                          "lastName": "Doe",
+                                          "email": "john.doe@example.com",
+                                          "phoneNumber": "+573001112233",
+                                          "roles": [
+                                            "ROLE_USER"
+                                          ]
+                                        }
+                                        """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = """
+                        Unauthorized. The request does not contain a valid JWT token,
+                        the token is missing, expired, malformed, or could not be authenticated.
+                        """,
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class),
+                            examples = @ExampleObject(
+                                    name = "Unauthorized response",
+                                    summary = "Missing or invalid token",
+                                    value = """
+                                        {
+                                          "message": "Authentication is required to access this resource",
+                                          "code": 401
+                                        }
+                                        """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = """
+                        Forbidden. The user is authenticated but does not have permission
+                        to access this resource, or the SecurityContext does not contain
+                        a valid authenticated principal.
+                        """,
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class),
+                            examples = @ExampleObject(
+                                    name = "Forbidden response",
+                                    summary = "Access denied",
+                                    value = """
+                                        {
+                                          "message": "User not authenticated",
+                                          "code": 403
+                                        }
+                                        """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = """
+                        Not found. The JWT token was valid, but the user referenced by the
+                        authenticated principal could not be found in the database.
+                        """,
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class),
+                            examples = @ExampleObject(
+                                    name = "User not found response",
+                                    summary = "Authenticated user does not exist in database",
+                                    value = """
+                                        {
+                                          "message": "User not found with email: john.doe@example.com",
+                                          "code": 404
+                                        }
+                                        """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "500",
+                    description = """
+                        Internal server error. An unexpected error occurred while resolving
+                        the authenticated principal or retrieving the user profile.
+                        """,
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class),
+                            examples = @ExampleObject(
+                                    name = "Internal server error response",
+                                    summary = "Unexpected server error",
+                                    value = """
+                                        {
+                                          "message": "Unexpected error while retrieving user profile",
+                                          "code": 500
+                                        }
+                                        """
+                            )
+                    )
+            )
+    })
+    @GetMapping("/me")
+    public ResponseEntity<UserProfileResponseDTO> getMyProfile() {
+        log.info("Processing get my profile request");
+        UserProfileResponseDTO userProfileResponseDTO = userService.getMyProfile();
+        return ResponseEntity.ok(userProfileResponseDTO);
+    }
+
+    @PatchMapping("/me")
+    public ResponseEntity<UserProfileUpdateResponseDTO> updateMyProfile(
+            @Valid @RequestBody UserProfileUpdateRequestDTO userProfileUpdateRequestDTO
+    ) {
+        log.info("Processing user profile update request");
+
+        UserProfileUpdateResponseDTO userProfileUpdateResponseDTO = userService.updateUserProfile(userProfileUpdateRequestDTO);
+
+        return ResponseEntity.ok(userProfileUpdateResponseDTO);
     }
 }

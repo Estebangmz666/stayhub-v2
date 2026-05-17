@@ -27,7 +27,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
- * Unit tests for {@link PaymentReminderScheduler}.
+ * Unit tests for {@link ReservationLifeCycleScheduler}.
  *
  * <p>Verifies that the scheduler correctly identifies reservations with approaching
  * payment deadlines and triggers reminder emails for each.</p>
@@ -45,7 +45,7 @@ class PaymentReminderSchedulerTest {
     private ReservationService reservationService;
 
     @InjectMocks
-    private PaymentReminderScheduler scheduler;
+    private ReservationLifeCycleScheduler scheduler;
 
     private Reservation reservationWithApproachingDeadline;
     private User guest;
@@ -146,5 +146,14 @@ class PaymentReminderSchedulerTest {
         scheduler.cancelExpiredUnpaidReservations();
 
         verify(reservationService).cancelExpiredUnpaidReservations();
+    }
+
+    @Test
+    void completePastReservations_DelegatesToReservationService() {
+        when(reservationService.completePastReservations()).thenReturn(3);
+
+        scheduler.completePastReservations();
+
+        verify(reservationService).completePastReservations();
     }
 }

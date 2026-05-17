@@ -6,12 +6,12 @@ import edu.uniquindio.stayhub_v2.dto.auth.ForgotPasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.auth.ResetPasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.auth.TokenResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.user.UserLoginRequestDTO;
+import edu.uniquindio.stayhub_v2.dto.user.UserProfileResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.user.UserSignupRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.user.UserSignupResponseDTO;
-import edu.uniquindio.stayhub_v2.exception.EmailAlreadyExistsException;
-import edu.uniquindio.stayhub_v2.exception.InvalidPasswordException;
-import edu.uniquindio.stayhub_v2.exception.InvalidRecoveryCodeException;
-import edu.uniquindio.stayhub_v2.exception.UserNotFoundException;
+import edu.uniquindio.stayhub_v2.dto.user.profileUpdate.UserProfileUpdateRequestDTO;
+import edu.uniquindio.stayhub_v2.dto.user.profileUpdate.UserProfileUpdateResponseDTO;
+import edu.uniquindio.stayhub_v2.exception.*;
 import edu.uniquindio.stayhub_v2.mapper.UserMapper;
 import edu.uniquindio.stayhub_v2.model.User;
 import edu.uniquindio.stayhub_v2.repository.UserRepository;
@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.security.SecureRandom;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.Random;
@@ -477,6 +478,16 @@ public class UserService {
         return String.valueOf(code);
     }
 
+    public UserProfileResponseDTO getMyProfile() {
+        User currentUser = getCurrentUser();
+
+        UserProfileResponseDTO userProfile = userMapper.toUserProfileResponseDTO(currentUser);
+
+        log.info("User profile retrieved successfully for user: {} with id: {}", currentUser.getEmail(), currentUser.getId());
+
+        return userProfile;
+    }
+
     /**
      * Builds the plain text content for the password recovery email.
      *
@@ -520,40 +531,79 @@ public class UserService {
         log.info("Password successfully changed for {}", user.getEmail());
     }
 
+    /**
+     * Updates the profile information of the currently authenticated user.
+     *
+     * <p>This method applies a partial update to the authenticated user's profile.
+     * Only non-null fields from the {@link UserProfileUpdateRequestDTO} are applied,
+     * preserving the existing values for fields that are not included in the request.</p>
+     *
+     * <p>The update is limited to non-critical profile attributes such as full name,
+     * phone number, birth date, and profile picture. It does not update authentication
+     * data such as email, password, roles, or account status.</p>
+     *
+     * @param userProfileUpdateRequestDTO the request DTO containing the profile fields to update
+     * @return a {@link UserProfileUpdateResponseDTO} containing the updated user profile information
+     * @throws EmptyRequestBodyException if the request body is null
+     * @throws org.springframework.security.access.AccessDeniedException if no authenticated user is found
+     */
+    @Transactional
+    public UserProfileUpdateResponseDTO updateUserProfile(UserProfileUpdateRequestDTO userProfileUpdateRequestDTO) {
+        if (userProfileUpdateRequestDTO == null){
+            throw new EmptyRequestBodyException("Request is null");
+        }
+
+        User currentUser = getCurrentUser();
+
+        updateProfileFields(currentUser, userProfileUpdateRequestDTO);
+
+        User updatedUser = userRepository.save(currentUser);
+
+        log.info("User profile updated successfully for user: {} with id: {}", updatedUser.getEmail(), updatedUser.getId());
+
+        return userMapper.toUserProfileUpdateResponseDTO(updatedUser);
+    }
+
+    /**
+     * Applies the non-null profile fields from the update request to the given user entity.
+     *
+     * @param currentUser the user entity to update
+     * @param userProfileUpdateRequestDTO the request DTO containing the new profile values
+     */
+    private void updateProfileFields(User currentUser, UserProfileUpdateRequestDTO userProfileUpdateRequestDTO) {
+        updateFullName(currentUser, userProfileUpdateRequestDTO.fullName());
+        updatePhoneNumber(currentUser, userProfileUpdateRequestDTO.phoneNumber());
+        updateBirthdate(currentUser, userProfileUpdateRequestDTO.birthDate());
+        updateProfilePictureUrl(currentUser, userProfileUpdateRequestDTO.profilePicture());
+    }
+
+    //Sub helpers for updateProfileFields();
+    private void updateFullName(User user, String fullName) {
+        if (fullName != null) {
+            user.setFullName(fullName.trim());
+        }
+    }
+
+    private void updatePhoneNumber(User user, String phoneNumber) {
+        if (phoneNumber != null) {
+            user.setPhoneNumber(phoneNumber.trim());
+        }
+    }
+
+    private void updateBirthdate(User user, LocalDate birthdate) {
+        if (birthdate != null) {
+            user.setBirthDate(birthdate);
+        }
+    }
+
+    private void updateProfilePictureUrl(User user, String profilePictureUrl) {
+        if (profilePictureUrl != null) {
+            user.setProfilePicture(profilePictureUrl.trim());
+        }
+    }
+
     /*
      * Additional methods that could be added in the future:
-     *
-     * // Update user profile
-     * @Transactional
-     * public UserProfileResponseDTO updateProfile(Long userId, UpdateProfileRequestDTO request) {
-     *     User user = userRepository.findById(userId)
-     *             .orElseThrow(() -> new UserNotFoundException("User not found"));
-     *
-     *     // Validate current user can only update their own profile
-     *     validateOwnership(user, getCurrentUser());
-     *
-     *     // Update allowed fields
-     *     user.setFullName(request.fullName());
-     *     user.setPhoneNumber(request.phoneNumber());
-     *     user.setProfilePicture(request.profilePicture());
-     *
-     *     return userMapper.toProfileResponseDTO(userRepository.save(user));
-     * }
-     *
-     * // Change password (authenticated user)
-     * @Transactional
-     * public void changePassword(String currentPassword, String newPassword) {
-     *     User user = getCurrentUser();
-     *
-     *     if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
-     *         throw new InvalidPasswordException("Current password is incorrect");
-     *     }
-     *
-     *     user.setPassword(passwordEncoder.encode(newPassword));
-     *     userRepository.save(user);
-     *
-     *     // Invalidate all existing tokens/sessions
-     * }
      *
      * // Soft delete user account
      * @Transactional
@@ -566,12 +616,6 @@ public class UserService {
      *
      *     user.setDeleted(true);
      *     userRepository.save(user);
-     * }
-     *
-     * // Verify email (with verification token)
-     * @Transactional
-     * public void verifyEmail(String token) {
-     *     // Implementation
      * }
      *
      * // Resend verification email

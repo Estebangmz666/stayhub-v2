@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f7;
+            line-height: 1.6;
+            color: #1d1d1f;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .email-container {
+            max-width: 520px;
+            margin: 40px auto;
+            background: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.04), 0 2px 6px rgba(0, 0, 0, 0.02);
+            overflow: hidden;
+        }
+
+        .email-header {
+            background: #1d1d1f;
+            color: #ffffff;
+            padding: 36px 32px 28px;
+            text-align: center;
+        }
+
+        .email-header h2 {
+            margin: 0;
+            font-size: 26px;
+            font-weight: 400;
+            letter-spacing: -0.5px;
+        }
+
+        .email-body {
+            padding: 40px 32px;
+        }
+
+        .notification-badge {
+            display: inline-block;
+            background: #e8f3ec;
+            color: #205c35;
+            padding: 8px 18px;
+            border-radius: 50px;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 28px;
+            letter-spacing: -0.2px;
+        }
+
+        .booking-details {
+            background: #fafafa;
+            border-radius: 16px;
+            padding: 24px;
+            margin: 24px 0;
+            border: 1px solid #e5e5e5;
+        }
+
+        .detail-item {
+            display: flex;
+            padding: 14px 0;
+            border-bottom: 1px solid #e5e5e5;
+        }
+
+        .detail-item:last-child {
+            border-bottom: none;
+        }
+
+        .detail-label {
+            flex: 1;
+            font-size: 14px;
+            color: #6e6e73;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .detail-value {
+            flex: 2;
+            font-size: 16px;
+            color: #1d1d1f;
+            font-weight: 500;
+            text-align: right;
+            letter-spacing: -0.3px;
+        }
+
+        .review-card {
+            background: #f5f5f7;
+            border-radius: 16px;
+            padding: 24px;
+            margin-top: 28px;
+            border: 1px solid #e5e5e5;
+            text-align: center;
+        }
+
+        .review-card p {
+            margin: 0 0 18px;
+            color: #4a4a4f;
+            font-size: 15px;
+        }
+
+        .cta-button {
+            display: inline-block;
+            background: #1d1d1f;
+            color: #ffffff !important;
+            text-decoration: none;
+            padding: 14px 24px;
+            border-radius: 999px;
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        .support-text {
+            margin-top: 18px;
+            color: #6e6e73;
+            font-size: 13px;
+        }
+
+        .footer {
+            background: #fafafa;
+            padding: 28px 32px;
+            text-align: center;
+            border-top: 1px solid #e5e5e5;
+        }
+
+        .footer p {
+            margin: 8px 0;
+            color: #6e6e73;
+            font-size: 14px;
+            letter-spacing: -0.2px;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 500;
+            color: #1d1d1f;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        @media (max-width: 600px) {
+            .email-container {
+                margin: 20px 16px;
+            }
+
+            .email-header, .email-body, .footer {
+                padding-left: 20px;
+                padding-right: 20px;
+            }
+        }
+    </style>
+    <title></title>
+</head>
+<body>
+<div class="email-container">
+    <div class="email-header">
+        <h2>Hola [[${guestName}]]</h2>
+    </div>
+
+    <div class="email-body">
+        <div class="notification-badge">
+            Estadia completada
+        </div>
+
+        <p>Tu estadia en <strong>[[${accommodationTitle}]]</strong> ha finalizado.</p>
+        <p>Gracias por reservar con StayHub. Tu opinion nos ayuda a mejorar y tambien ayuda a futuros huespedes.</p>
+
+        <div class="booking-details">
+            <div class="detail-item">
+                <span class="detail-label">Reserva</span>
+                <span class="detail-value">#[[${reservationId}]]</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Alojamiento</span>
+                <span class="detail-value">[[${accommodationTitle}]]</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Check-in</span>
+                <span class="detail-value">[[${startDate}]]</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Check-out</span>
+                <span class="detail-value">[[${endDate}]]</span>
+            </div>
+        </div>
+
+        <div class="review-card">
+            <p>Cuando quieras, puedes calificar tu experiencia desde este enlace.</p>
+            <a class="cta-button" th:href="${reviewUrl}" href="#">Calificar estadia</a>
+            <div class="support-text">
+                Si el boton no funciona, abre este enlace en tu navegador:<br>
+                <span th:text="${reviewUrl}">https://stay-hub-xi.vercel.app/dashboard/guest/reviews</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <div class="logo">StayHub</div>
+        <p>Gracias por usar StayHub</p>
+        <p style="font-size: 12px; margin-top: 18px;">
+            soporte@stayhub.com
+        </p>
+    </div>
+</div>
+</body>
+</html>

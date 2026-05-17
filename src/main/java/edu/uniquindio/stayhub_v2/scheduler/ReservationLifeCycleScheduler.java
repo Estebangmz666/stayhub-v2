@@ -41,7 +41,7 @@ import java.util.Locale;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class PaymentReminderScheduler {
+public class ReservationLifeCycleScheduler {
 
     private final ReservationRepository reservationRepository;
     private final EmailService emailService;
@@ -106,6 +106,15 @@ public class PaymentReminderScheduler {
                 cancelledReservations);
     }
 
+    @Scheduled(cron = "0 30 0 * * ?")
+    public void completePastReservations() {
+        log.info("Running completed reservation scheduler.");
+
+        int completedReservations = reservationService.completePastReservations();
+
+        log.info("Completed reservation scheduler finished. Reservations marked as completed: {}", completedReservations);
+    }
+
     /**
      * Sends the payment reminder email to the guest of the given reservation.
      *
@@ -150,7 +159,7 @@ public class PaymentReminderScheduler {
         if (amount == null)
             return "$0";
         try {
-            NumberFormat fmt = NumberFormat.getCurrencyInstance(new Locale("es", "CO"));
+            NumberFormat fmt = NumberFormat.getCurrencyInstance(Locale.of("es", "CO"));
             return fmt.format(amount);
         } catch (Exception e) {
             log.warn("Error formatting currency amount: {}", e.getMessage());
