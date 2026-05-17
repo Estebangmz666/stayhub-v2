@@ -1,6 +1,5 @@
 package edu.uniquindio.stayhub_v2.dto.rental;
 
-import edu.uniquindio.stayhub_v2.model.RentalType;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
@@ -14,10 +13,9 @@ import java.time.LocalDateTime;
  *
  * @param id              Unique identifier of the rental package.
  * @param accommodationId ID of the accommodation this package belongs to.
- * @param type            Rental modality.
  * @param startDate       First day the package is active.
  * @param endDate         Last day the package is active.
- * @param price           Package price (replaces the accommodation's base nightly rate).
+ * @param pricePerNight   Nightly price for the package period.
  * @param createdAt       Timestamp when the package was created.
  * @param updatedAt       Timestamp of the last update.
  *
@@ -34,17 +32,14 @@ public record RentalPackageResponseDTO(
         @Schema(description = "ID of the accommodation this package belongs to.", example = "15")
         Long accommodationId,
 
-        @Schema(description = "Rental modality.", example = "CASA_ENTERA")
-        RentalType type,
-
         @Schema(description = "First day the package is active (inclusive).", example = "2026-07-01")
         LocalDate startDate,
 
         @Schema(description = "Last day the package is active (inclusive).", example = "2026-07-31")
         LocalDate endDate,
 
-        @Schema(description = "Package price that replaces the nightly base rate for this period.", example = "150000.00")
-        BigDecimal price,
+        @Schema(description = "Nightly price that replaces the accommodation base rate for this period.", example = "150000.00")
+        BigDecimal pricePerNight,
 
         @Schema(description = "Timestamp when the package was created.", example = "2026-05-04T10:00:00")
         LocalDateTime createdAt,

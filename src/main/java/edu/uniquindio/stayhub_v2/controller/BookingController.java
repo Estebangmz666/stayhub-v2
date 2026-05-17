@@ -36,7 +36,19 @@ public class BookingController {
 
     @Operation(
             summary = "Create a new accommodation reservation",
-            description = "Creates a new reservation for an accommodation based on the provided details. Validates that dates are in the future and end date is after start date."
+            description = """
+                    Creates a new reservation for a full accommodation stay.
+
+                    Pricing rules:
+                    - The accommodation base `pricePerNight` applies by default.
+                    - If one or more nights fall inside a seasonal pricing package, those nights use the package `pricePerNight`.
+                    - If the stay is partially inside and partially outside a package, the backend calculates a mixed total night by night.
+
+                    The response includes:
+                    - the final `totalPrice`,
+                    - deposit payment instructions,
+                    - and a `rentalPriceModification` summary that tells the frontend whether the reservation became cheaper, more expensive, or remained unchanged after applying seasonal pricing.
+                    """
     )
     @ApiResponses(value = {
             @ApiResponse(
@@ -53,12 +65,20 @@ public class BookingController {
                             "id": 12345,
                             "startDate": "2025-06-01T14:00:00",
                             "endDate": "2025-06-05T11:00:00",
-                            "totalPrice": 450.00,
-                            "currency": "USD",
+                            "totalPrice": 720000.00,
+                            "currency": "COP",
                             "status": "ACTIVE",
-                            "accommodationId": 1,
-                            "accommodationTitle": "Beachfront Villa with Pool",
-                            "userId": 678
+                            "accommodationId": 15,
+                            "accommodationTitle": "Cabana familiar con vista al valle",
+                            "userId": 678,
+                            "depositAmount": 144000.00,
+                            "bankAccountNumber": "3001234567890",
+                            "paymentDeadline": "2026-05-20T23:59:59",
+                            "rentalPriceModification": {
+                              "type": "SAVED",
+                              "amount": 60000.00,
+                              "message": "You have saved $60,000 COP on this reservation."
+                            }
                         }
                         """
                             )

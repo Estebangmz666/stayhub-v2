@@ -9,7 +9,6 @@ import edu.uniquindio.stayhub_v2.exception.UnauthorizedHostException;
 import edu.uniquindio.stayhub_v2.mapper.RentalPackageMapper;
 import edu.uniquindio.stayhub_v2.model.Accommodation;
 import edu.uniquindio.stayhub_v2.model.RentalPackage;
-import edu.uniquindio.stayhub_v2.model.RentalType;
 import edu.uniquindio.stayhub_v2.model.Role;
 import edu.uniquindio.stayhub_v2.model.User;
 import edu.uniquindio.stayhub_v2.repository.AccommodationRepository;
@@ -84,20 +83,18 @@ class RentalPackageServiceTest {
                 existingPackage = RentalPackage.builder()
                                 .id(100L)
                                 .accommodation(accommodation)
-                                .type(RentalType.CASA_ENTERA)
                                 .startDate(LocalDate.of(2026, 7, 1))
                                 .endDate(LocalDate.of(2026, 7, 31))
-                                .price(new BigDecimal("150000.00"))
+                                .pricePerNight(new BigDecimal("150000.00"))
                                 .build();
 
                 createRequest = new CreateRentalPackageRequestDTO(
-                                RentalType.CASA_ENTERA,
                                 LocalDate.of(2026, 7, 1),
                                 LocalDate.of(2026, 7, 31),
                                 new BigDecimal("150000.00"));
 
                 responseDTO = new RentalPackageResponseDTO(
-                                100L, 10L, RentalType.CASA_ENTERA,
+                                100L, 10L,
                                 LocalDate.of(2026, 7, 1),
                                 LocalDate.of(2026, 7, 31),
                                 new BigDecimal("150000.00"),
@@ -123,7 +120,7 @@ class RentalPackageServiceTest {
 
                 assertThat(result.id()).isEqualTo(100L);
                 assertThat(result.accommodationId()).isEqualTo(10L);
-                assertThat(result.price()).isEqualByComparingTo("150000.00");
+                assertThat(result.pricePerNight()).isEqualByComparingTo("150000.00");
 
                 verify(rentalPackageRepository).save(any(RentalPackage.class));
         }
@@ -186,7 +183,6 @@ class RentalPackageServiceTest {
         void createPackage_InvalidDateRange_ThrowsIllegalArgumentException() {
                 // endDate is not after startDate → constructor throws
                 assertThatThrownBy(() -> new CreateRentalPackageRequestDTO(
-                                RentalType.CASA_ENTERA,
                                 LocalDate.of(2026, 7, 31),
                                 LocalDate.of(2026, 7, 1), // endDate before startDate
                                 new BigDecimal("100000")))
@@ -199,7 +195,7 @@ class RentalPackageServiceTest {
         @Test
         void updatePackage_Success() {
                 UpdateRentalPackageRequestDTO updateRequest = new UpdateRentalPackageRequestDTO(
-                                RentalType.POR_HABITACIONES, null, null, new BigDecimal("160000.00"));
+                                null, null, new BigDecimal("160000.00"));
 
                 when(userService.getCurrentUser()).thenReturn(hostUser);
                 when(accommodationRepository.findByIdAndDeletedFalse(10L))
@@ -209,7 +205,7 @@ class RentalPackageServiceTest {
                 when(rentalPackageRepository.save(any())).thenReturn(existingPackage);
 
                 RentalPackageResponseDTO updated = new RentalPackageResponseDTO(
-                                100L, 10L, RentalType.POR_HABITACIONES,
+                                100L, 10L,
                                 existingPackage.getStartDate(), existingPackage.getEndDate(),
                                 new BigDecimal("160000.00"),
                                 LocalDateTime.now(), LocalDateTime.now());
@@ -217,8 +213,7 @@ class RentalPackageServiceTest {
 
                 RentalPackageResponseDTO result = rentalPackageService.updatePackage(10L, 100L, updateRequest);
 
-                assertThat(result.type()).isEqualTo(RentalType.POR_HABITACIONES);
-                assertThat(result.price()).isEqualByComparingTo("160000.00");
+                assertThat(result.pricePerNight()).isEqualByComparingTo("160000.00");
 
                 verify(rentalPackageRepository).save(existingPackage);
         }
@@ -226,7 +221,6 @@ class RentalPackageServiceTest {
         @Test
         void updatePackage_OverlappingNewDates_ThrowsIllegalStateException() {
                 UpdateRentalPackageRequestDTO updateRequest = new UpdateRentalPackageRequestDTO(
-                                null,
                                 LocalDate.of(2026, 8, 1),
                                 LocalDate.of(2026, 8, 31),
                                 null);
@@ -251,7 +245,7 @@ class RentalPackageServiceTest {
 
         @Test
         void updatePackage_PackageNotFound_ThrowsRentalPackageNotFoundException() {
-                UpdateRentalPackageRequestDTO updateRequest = new UpdateRentalPackageRequestDTO(null, null, null,
+                UpdateRentalPackageRequestDTO updateRequest = new UpdateRentalPackageRequestDTO(null, null,
                                 new BigDecimal("100"));
 
                 when(userService.getCurrentUser()).thenReturn(hostUser);
@@ -267,7 +261,7 @@ class RentalPackageServiceTest {
 
         @Test
         void updatePackage_NotOwner_ThrowsUnauthorizedHostException() {
-                UpdateRentalPackageRequestDTO updateRequest = new UpdateRentalPackageRequestDTO(null, null, null,
+                UpdateRentalPackageRequestDTO updateRequest = new UpdateRentalPackageRequestDTO(null, null,
                                 new BigDecimal("100"));
 
                 when(userService.getCurrentUser()).thenReturn(otherHost);

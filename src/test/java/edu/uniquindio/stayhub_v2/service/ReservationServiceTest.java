@@ -2,6 +2,7 @@ package edu.uniquindio.stayhub_v2.service;
 
 import edu.uniquindio.stayhub_v2.dto.reservation.CreateReservationRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.CreateReservationResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.reservation.RentalPriceModificationType;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryProjectionDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryResponseDTO;
@@ -14,11 +15,13 @@ import edu.uniquindio.stayhub_v2.exception.ReservationNotFoundException;
 import edu.uniquindio.stayhub_v2.exception.ReservationPolicyViolationException;
 import edu.uniquindio.stayhub_v2.mapper.ReservationMapper;
 import edu.uniquindio.stayhub_v2.model.Accommodation;
+import edu.uniquindio.stayhub_v2.model.RentalPackage;
 import edu.uniquindio.stayhub_v2.model.Role;
 import edu.uniquindio.stayhub_v2.model.Reservation;
 import edu.uniquindio.stayhub_v2.model.ReservationStatus;
 import edu.uniquindio.stayhub_v2.model.User;
 import edu.uniquindio.stayhub_v2.repository.AccommodationRepository;
+import edu.uniquindio.stayhub_v2.repository.RentalPackageRepository;
 import edu.uniquindio.stayhub_v2.repository.ReservationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,6 +53,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class ReservationServiceTest {
@@ -59,6 +63,9 @@ class ReservationServiceTest {
 
     @Mock
     private ReservationRepository reservationRepository;
+
+    @Mock
+    private RentalPackageRepository rentalPackageRepository;
 
     @Mock
     private UserService userService;
@@ -121,6 +128,9 @@ class ReservationServiceTest {
         savedReservation.setDepositPaid(false);
         savedReservation.setStartDate(LocalDateTime.now().plusDays(10));
         savedReservation.setEndDate(LocalDateTime.now().plusDays(13));
+
+        lenient().when(rentalPackageRepository.findOverlappingPackagesForStay(any(), any(), any()))
+                .thenReturn(List.of());
     }
 
     private CreateReservationResponseDTO baseDto() {
@@ -134,7 +144,7 @@ class ReservationServiceTest {
                 accommodation.getId(),
                 accommodation.getTitle(),
                 guest.getId(),
-                null, null, null
+                null, null, null, null
         );
     }
 
@@ -189,6 +199,8 @@ class ReservationServiceTest {
         assertThat(response.depositAmount()).isNotNull();
         assertThat(response.bankAccountNumber()).isEqualTo(BANK_ACCOUNT);
         assertThat(response.paymentDeadline()).isNotNull();
+        assertThat(response.rentalPriceModification()).isNotNull();
+        assertThat(response.rentalPriceModification().type()).isEqualTo(RentalPriceModificationType.UNCHANGED);
         assertThat(response.id()).isEqualTo(100L);
         assertThat(response.status()).isEqualTo(ReservationStatus.ACTIVE);
 
@@ -214,6 +226,154 @@ class ReservationServiceTest {
                 .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
 
         assertThat(response.depositAmount()).isEqualByComparingTo(expectedDeposit);
+    }
+
+    @Test
+    void createReservation_WithoutSeasonalPricing_ReturnsUnchangedModification() {
+        LocalDateTime start = LocalDateTime.now().plusDays(10);
+        LocalDateTime end = LocalDateTime.now().plusDays(13);
+        CreateReservationRequestDTO request = new CreateReservationRequestDTO(10L, start, end);
+
+        when(accommodationRepository.findAvailableByIdWithWriteLock(10L)).thenReturn(Optional.of(accommodation));
+        when(reservationRepository.existsByAccommodationIdAndDateRange(any(), any(), any())).thenReturn(false);
+        when(userService.getCurrentUser()).thenReturn(guest);
+        when(reservationRepository.save(any(Reservation.class))).thenReturn(savedReservation);
+        when(reservationMapper.toDTO(savedReservation)).thenReturn(baseDto());
+
+        CreateReservationResponseDTO response = reservationService.createReservation(request);
+
+        assertThat(response.rentalPriceModification().type()).isEqualTo(RentalPriceModificationType.UNCHANGED);
+        assertThat(response.rentalPriceModification().amount()).isEqualByComparingTo("0.00");
+        assertThat(response.rentalPriceModification().message())
+                .contains("no tuvo cambios de precio por temporada");
+    }
+
+    @Test
+    void createReservation_AllNightsWithinPackage_UsesPackageNightlyPrice() {
+        LocalDateTime start = LocalDateTime.now().plusDays(10);
+        LocalDateTime end = start.plusDays(3);
+        CreateReservationRequestDTO request = new CreateReservationRequestDTO(10L, start, end);
+
+        RentalPackage rentalPackage = RentalPackage.builder()
+                .id(1L)
+                .accommodation(accommodation)
+                .startDate(start.toLocalDate())
+                .endDate(end.toLocalDate().minusDays(1))
+                .pricePerNight(new BigDecimal("300000"))
+                .build();
+
+        when(accommodationRepository.findAvailableByIdWithWriteLock(10L)).thenReturn(Optional.of(accommodation));
+        when(reservationRepository.existsByAccommodationIdAndDateRange(any(), any(), any())).thenReturn(false);
+        when(userService.getCurrentUser()).thenReturn(guest);
+        when(rentalPackageRepository.findOverlappingPackagesForStay(
+                eq(10L),
+                eq(start.toLocalDate()),
+                eq(end.toLocalDate().minusDays(1))
+        )).thenReturn(List.of(rentalPackage));
+        when(reservationRepository.save(any(Reservation.class))).thenReturn(savedReservation);
+        when(reservationMapper.toDTO(savedReservation)).thenReturn(baseDto());
+
+        reservationService.createReservation(request);
+
+        ArgumentCaptor<Reservation> captor = ArgumentCaptor.forClass(Reservation.class);
+        verify(reservationRepository).save(captor.capture());
+        assertThat(captor.getValue().getTotalPrice()).isEqualByComparingTo("900000");
+    }
+
+    @Test
+    void createReservation_MixedPackageAndBasePricing_SumsNightlySegments() {
+        LocalDateTime start = LocalDateTime.now().plusDays(10);
+        LocalDateTime end = start.plusDays(4);
+        CreateReservationRequestDTO request = new CreateReservationRequestDTO(10L, start, end);
+
+        RentalPackage rentalPackage = RentalPackage.builder()
+                .id(1L)
+                .accommodation(accommodation)
+                .startDate(start.toLocalDate().plusDays(1))
+                .endDate(start.toLocalDate().plusDays(2))
+                .pricePerNight(new BigDecimal("300000"))
+                .build();
+
+        when(accommodationRepository.findAvailableByIdWithWriteLock(10L)).thenReturn(Optional.of(accommodation));
+        when(reservationRepository.existsByAccommodationIdAndDateRange(any(), any(), any())).thenReturn(false);
+        when(userService.getCurrentUser()).thenReturn(guest);
+        when(rentalPackageRepository.findOverlappingPackagesForStay(
+                eq(10L),
+                eq(start.toLocalDate()),
+                eq(end.toLocalDate().minusDays(1))
+        )).thenReturn(List.of(rentalPackage));
+        when(reservationRepository.save(any(Reservation.class))).thenReturn(savedReservation);
+        when(reservationMapper.toDTO(savedReservation)).thenReturn(baseDto());
+
+        reservationService.createReservation(request);
+
+        ArgumentCaptor<Reservation> captor = ArgumentCaptor.forClass(Reservation.class);
+        verify(reservationRepository).save(captor.capture());
+        assertThat(captor.getValue().getTotalPrice()).isEqualByComparingTo("1000000");
+    }
+
+    @Test
+    void createReservation_AllNightsWithinPackage_ReturnsIncreasedModification() {
+        LocalDateTime start = LocalDateTime.now().plusDays(10);
+        LocalDateTime end = start.plusDays(3);
+        CreateReservationRequestDTO request = new CreateReservationRequestDTO(10L, start, end);
+
+        RentalPackage rentalPackage = RentalPackage.builder()
+                .id(1L)
+                .accommodation(accommodation)
+                .startDate(start.toLocalDate())
+                .endDate(end.toLocalDate().minusDays(1))
+                .pricePerNight(new BigDecimal("300000"))
+                .build();
+
+        when(accommodationRepository.findAvailableByIdWithWriteLock(10L)).thenReturn(Optional.of(accommodation));
+        when(reservationRepository.existsByAccommodationIdAndDateRange(any(), any(), any())).thenReturn(false);
+        when(userService.getCurrentUser()).thenReturn(guest);
+        when(rentalPackageRepository.findOverlappingPackagesForStay(
+                eq(10L),
+                eq(start.toLocalDate()),
+                eq(end.toLocalDate().minusDays(1))
+        )).thenReturn(List.of(rentalPackage));
+        when(reservationRepository.save(any(Reservation.class))).thenReturn(savedReservation);
+        when(reservationMapper.toDTO(savedReservation)).thenReturn(baseDto());
+
+        CreateReservationResponseDTO response = reservationService.createReservation(request);
+
+        assertThat(response.rentalPriceModification().type()).isEqualTo(RentalPriceModificationType.INCREASED);
+        assertThat(response.rentalPriceModification().amount()).isEqualByComparingTo("300000");
+        assertThat(response.rentalPriceModification().message()).contains("aumentó");
+    }
+
+    @Test
+    void createReservation_MixedPricingWithDiscountedPackage_ReturnsSavedModification() {
+        LocalDateTime start = LocalDateTime.now().plusDays(10);
+        LocalDateTime end = start.plusDays(4);
+        CreateReservationRequestDTO request = new CreateReservationRequestDTO(10L, start, end);
+
+        RentalPackage rentalPackage = RentalPackage.builder()
+                .id(1L)
+                .accommodation(accommodation)
+                .startDate(start.toLocalDate().plusDays(1))
+                .endDate(start.toLocalDate().plusDays(2))
+                .pricePerNight(new BigDecimal("150000"))
+                .build();
+
+        when(accommodationRepository.findAvailableByIdWithWriteLock(10L)).thenReturn(Optional.of(accommodation));
+        when(reservationRepository.existsByAccommodationIdAndDateRange(any(), any(), any())).thenReturn(false);
+        when(userService.getCurrentUser()).thenReturn(guest);
+        when(rentalPackageRepository.findOverlappingPackagesForStay(
+                eq(10L),
+                eq(start.toLocalDate()),
+                eq(end.toLocalDate().minusDays(1))
+        )).thenReturn(List.of(rentalPackage));
+        when(reservationRepository.save(any(Reservation.class))).thenReturn(savedReservation);
+        when(reservationMapper.toDTO(savedReservation)).thenReturn(baseDto());
+
+        CreateReservationResponseDTO response = reservationService.createReservation(request);
+
+        assertThat(response.rentalPriceModification().type()).isEqualTo(RentalPriceModificationType.SAVED);
+        assertThat(response.rentalPriceModification().amount()).isEqualByComparingTo("100000");
+        assertThat(response.rentalPriceModification().message()).contains("Has ahorrado");
     }
 
     @Test
@@ -469,6 +629,41 @@ class ReservationServiceTest {
         assertThat(savedReservation.getTotalPrice()).isEqualByComparingTo("800000");
         assertThat(savedReservation.getDepositAmount()).isEqualByComparingTo("160000.00");
         assertThat(savedReservation.getDepositPaid()).isTrue();
+    }
+
+    @Test
+    void updateReservation_MixedPackageAndBasePricing_RecalculatesWithSeasonalRates() {
+        savedReservation.setDepositPaid(true);
+        LocalDateTime newStart = LocalDateTime.now().plusDays(8);
+        LocalDateTime newEnd = newStart.plusDays(4);
+        UpdateReservationRequestDTO request = new UpdateReservationRequestDTO(newStart, newEnd);
+
+        RentalPackage rentalPackage = RentalPackage.builder()
+                .id(1L)
+                .accommodation(accommodation)
+                .startDate(newStart.toLocalDate().plusDays(1))
+                .endDate(newStart.toLocalDate().plusDays(2))
+                .pricePerNight(new BigDecimal("300000"))
+                .build();
+
+        when(userService.getCurrentUser()).thenReturn(guest);
+        when(reservationRepository.findAuthorizedById(100L, guest.getId()))
+                .thenReturn(Optional.of(savedReservation));
+        when(reservationRepository.existsByAccommodationIdAndDateRangeExcludingReservationId(
+                eq(accommodation.getId()), eq(100L), eq(newStart), eq(newEnd)))
+                .thenReturn(false);
+        when(rentalPackageRepository.findOverlappingPackagesForStay(
+                eq(accommodation.getId()),
+                eq(newStart.toLocalDate()),
+                eq(newEnd.toLocalDate().minusDays(1))
+        )).thenReturn(List.of(rentalPackage));
+        when(reservationRepository.save(any(Reservation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(reservationMapper.toRetrieveDTO(any(Reservation.class))).thenReturn(retrieveDto());
+
+        reservationService.updateReservation(100L, request);
+
+        assertThat(savedReservation.getTotalPrice()).isEqualByComparingTo("1000000");
+        assertThat(savedReservation.getDepositAmount()).isEqualByComparingTo("200000.00");
     }
 
     @Test

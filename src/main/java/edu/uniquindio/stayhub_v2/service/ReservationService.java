@@ -2,6 +2,8 @@ package edu.uniquindio.stayhub_v2.service;
 
 import edu.uniquindio.stayhub_v2.dto.reservation.CreateReservationRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.CreateReservationResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.reservation.RentalPriceModificationResponseDTO;
+import edu.uniquindio.stayhub_v2.dto.reservation.RentalPriceModificationType;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryProjectionDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryResponseDTO;
@@ -15,9 +17,11 @@ import edu.uniquindio.stayhub_v2.exception.ReservationPolicyViolationException;
 import edu.uniquindio.stayhub_v2.mapper.ReservationMapper;
 import edu.uniquindio.stayhub_v2.model.*;
 import edu.uniquindio.stayhub_v2.repository.AccommodationRepository;
+import edu.uniquindio.stayhub_v2.repository.RentalPackageRepository;
 import edu.uniquindio.stayhub_v2.repository.ReservationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -31,9 +35,12 @@ import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.text.NumberFormat;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Service class for managing reservation (booking) operations.
@@ -112,6 +119,7 @@ public class ReservationService {
 
     private final AccommodationRepository accommodationRepository;
     private final ReservationRepository reservationRepository;
+    private final RentalPackageRepository rentalPackageRepository;
     private final UserService userService;
     private final ReservationMapper reservationMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
@@ -128,89 +136,67 @@ public class ReservationService {
     private static final int MINIMUM_BOOKING_ANTICIPATION_HOURS = 72;
     private static final int MINIMUM_CANCELLATION_ANTICIPATION_HOURS = 48;
 
+
     /**
-     * Creates a new reservation (booking) for accommodation.
+     * Creates a new reservation for a full-accommodation stay.
      *
-     * <p>This method orchestrates the entire reservation creation flow:
+     * <p>Internal note for the team: one year ago only God and the original
+     * implementer knew how this method worked. Now, only God knows.</p>
+     *
+     * <p>This method orchestrates the reservation creation flow end to end:
      * <ol>
-     *   <li>Retrieve and validate the accommodation exists</li>
-     *   <li>Check availability for the requested dates (no overlap with existing reservations)</li>
-     *   <li>Get the current authenticated user as the guest</li>
-     *   <li>Calculate number of nights and total price</li>
-     *   <li>Create and persist the reservation entity</li>
-     *   <li>Publish a {@link ReservationCreatedEvent} for async processing</li>
-     *   <li>Return the reservation details as a DTO</li>
+     *   <li>Validates the minimum anticipation rule of 72 hours before check-in</li>
+     *   <li>Retrieves and locks the accommodation to serialize competing booking attempts</li>
+     *   <li>Checks that no active reservation overlaps the requested stay</li>
+     *   <li>Resolves the authenticated user as the guest owner of the reservation</li>
+     *   <li>Validates that the stay spans at least one night</li>
+     *   <li>Calculates the final reservation total using base nightly pricing and seasonal pricing packages</li>
+     *   <li>Calculates the required deposit amount and payment deadline</li>
+     *   <li>Persists the reservation and publishes a {@link ReservationCreatedEvent}</li>
+     *   <li>Builds the response DTO, including deposit instructions and a seasonal pricing summary</li>
      * </ol>
      *
-     * <p><b>Availability Check Algorithm:</b></p>
-     * Uses {@link ReservationRepository#existsByAccommodationIdAndDateRange}
-     * which checks for overlapping date ranges with existing active reservations.
-     * Overlap is detected when:
+     * <p><b>Availability check:</b></p>
+     * Uses {@link ReservationRepository#existsByAccommodationIdAndDateRange(Long, LocalDateTime, LocalDateTime)}
+     * to reject overlaps with active reservations. Two stays overlap when:
      * <pre>
      * existingStart < newEnd AND existingEnd > newStart
      * </pre>
      *
-     * <p><b>Price Calculation:</b></p>
-     * The total price is calculated as:
-     * <pre>
-     * totalPrice = pricePerNight × numberOfNights
-     * </pre>
-     * Where {@code numberOfNights} is the difference in days between end date and start date.
+     * <p><b>Seasonal pricing calculation:</b></p>
+     * The accommodation {@code pricePerNight} is the default rate. If one or more
+     * nights fall inside a {@link RentalPackage}, those nights use the package
+     * {@code pricePerNight}. The final total is calculated night by night, which
+     * allows mixed stays that are partially inside and partially outside seasonal
+     * price ranges.
      *
-     * <p><b>Transactional Behavior:</b></p>
+     * <p>After the final total is computed, the method also calculates the base total
+     * without seasonal pricing so it can build a {@code rentalPriceModification}
+     * summary for the response. That summary tells the frontend whether the reservation
+     * price was reduced, increased, or left unchanged by seasonal pricing.</p>
+     *
+     * <p><b>Transactional behavior:</b></p>
+     * The whole flow runs inside a single transaction. If any validation or
+     * persistence step fails, the reservation is not created.
+     *
+     * <p><b>Main validation outcomes:</b></p>
      * <ul>
-     *   <li>Everything within this method executes in a single transaction</li>
-     *   <li>If any exception is thrown, the transaction rolls back</li>
-     *   <li>The event is published after successful commit (via {@code @TransactionalEventListener})</li>
+     *   <li>{@link AccommodationNotFoundException}: accommodation does not exist, is deleted, or is unavailable</li>
+     *   <li>{@link ReservationPolicyViolationException}: check-in is inside the forbidden 72-hour window</li>
+     *   <li>{@link IllegalStateException}: the requested stay overlaps an active reservation</li>
+     *   <li>{@link IllegalArgumentException}: the stay is shorter than one night</li>
      * </ul>
      *
-     * <p><b>Validation Steps:</b></p>
-     * <table border="1">
-     *   <tr><th>Validation</th><th>Exception</th><th>HTTP Status</th></tr>
-     *   <tr><td>Accommodation exists</td><td>AccommodationNotFoundException</td><td>404</td></tr>
-     *   <tr><td>Dates don't overlap</td><td>IllegalStateException</td><td>409 Conflict</td></tr>
-     *   <tr><td>At least one night</td><td>IllegalArgumentException</td><td>400</td></tr>
-     *   <tr><td>User authenticated</td><td>AuthenticationException</td><td>401</td></tr>
-     * </table>
-     *
-     * <p><b>Example Request:</b></p>
-     * <pre>{@code
-     * {
-     *   "accommodationId": 1,
-     *   "startDate": "2025-06-01T15:00:00",
-     *   "endDate": "2025-06-05T11:00:00"
-     * }
-     * }</pre>
-     *
-     * <p><b>Example Response:</b></p>
-     * <pre>{@code
-     * {
-     *   "id": 12345,
-     *   "startDate": "2025-06-01T15:00:00",
-     *   "endDate": "2025-06-05T11:00:00",
-     *   "totalPrice": 1000.00,
-     *   "currency": "USD",
-     *   "status": "ACTIVE",
-     *   "accommodationId": 1,
-     *   "accommodationTitle": "Beachfront Villa",
-     *   "userId": 678
-     * }
-     * }</pre>
-     *
-     * <p><b>Logging:</b></p>
-     * Detailed logs are written at each step for monitoring and debugging:
-     * <ul>
-     *   <li>INFO: Processing booking request</li>
-     *   <li>DEBUG: Booking created successfully</li>
-     *   <li>WARN: Overlap detected, accommodation not available</li>
-     *   <li>ERROR: Unexpected failures during processing</li>
-     * </ul>
-     *
-     * @param createReservationRequestDTO The reservation request containing accommodation ID and dates
-     * @return CreateReservationResponseDTO containing the created reservation details
-     * @throws AccommodationNotFoundException if the accommodation does not exist or is deleted
-     * @throws IllegalStateException if the accommodation is already booked for the requested dates
-     * @throws IllegalArgumentException if the reservation is for less than one night
+     * @param createReservationRequestDTO request payload containing accommodation ID,
+     *                                    check-in and check-out datetimes
+     * @return {@link CreateReservationResponseDTO} with reservation data, deposit
+     *         instructions, and seasonal pricing modification details
+     * @throws AccommodationNotFoundException if the accommodation does not exist,
+     *                                        is deleted, or cannot be booked
+     * @throws ReservationPolicyViolationException if the reservation is attempted
+     *                                             less than 72 hours before check-in
+     * @throws IllegalStateException if the requested dates overlap an active reservation
+     * @throws IllegalArgumentException if the stay duration is not at least one night
      */
     @Transactional
     public CreateReservationResponseDTO createReservation(
@@ -254,19 +240,33 @@ public class ReservationService {
         log.debug("Guest user: {} (ID: {})", user.getEmail(), user.getId());
 
         // 4. Calculate number of nights and total price
-        long nights = calculateNights(
+        calculateNights(
                 createReservationRequestDTO.startDate(),
                 createReservationRequestDTO.endDate(),
                 accommodation.getId()
         );
-        BigDecimal totalPrice = calculateTotalPrice(accommodation, nights);
+        BigDecimal totalPrice = calculateTotalPrice(
+                accommodation,
+                createReservationRequestDTO.startDate(),
+                createReservationRequestDTO.endDate()
+        );
 
-        log.debug("Calculated price: {} {} for {} nights",
-                totalPrice, accommodation.getCurrency(), nights);
+        log.debug("Calculated price: {} {} for stay {} to {}",
+                totalPrice,
+                accommodation.getCurrency(),
+                createReservationRequestDTO.startDate(),
+                createReservationRequestDTO.endDate());
 
         // 5. Calculate deposit (20%) and payment deadline
         BigDecimal depositAmount = calculateDepositAmount(totalPrice);
         LocalDateTime paymentDeadline = LocalDateTime.now().plusDays(deadlineDays);
+        BigDecimal baseTotalPrice = calculateBaseTotalPrice(
+                accommodation,
+                createReservationRequestDTO.startDate(),
+                createReservationRequestDTO.endDate()
+        );
+        RentalPriceModificationResponseDTO rentalPriceModification =
+                buildRentalPriceModification(baseTotalPrice, totalPrice, accommodation.getCurrency());
         log.debug("Deposit amount: {} | Payment deadline: {}", depositAmount, paymentDeadline);
 
         // 6. Create and populate reservation entity
@@ -304,7 +304,8 @@ public class ReservationService {
                 base.userId(),
                 depositAmount,
                 bankAccountNumber,
-                paymentDeadline
+                paymentDeadline,
+                rentalPriceModification
         );
         log.debug("Booking response prepared for reservation ID: {} | Deposit: {} | Deadline: {}",
                 saved.getId(), depositAmount, paymentDeadline);
@@ -404,12 +405,16 @@ public class ReservationService {
                     "Accommodation is already booked for the selected dates");
         }
 
-        long nights = calculateNights(
+        calculateNights(
                 updateReservationRequestDTO.startDate(),
                 updateReservationRequestDTO.endDate(),
                 accommodationId
         );
-        BigDecimal totalPrice = calculateTotalPrice(reservation.getAccommodation(), nights);
+        BigDecimal totalPrice = calculateTotalPrice(
+                reservation.getAccommodation(),
+                updateReservationRequestDTO.startDate(),
+                updateReservationRequestDTO.endDate()
+        );
 
         reservation.setStartDate(updateReservationRequestDTO.startDate());
         reservation.setEndDate(updateReservationRequestDTO.endDate());
@@ -499,7 +504,7 @@ public class ReservationService {
 
         log.info("Retrieving reservation with ID: {}", reservationId);
 
-        // 1. Get authenticated user
+        // 1. Get an authenticated user
         User currentUser = userService.getCurrentUser();
         log.debug("Authenticated user: {} (ID: {})", currentUser.getEmail(), currentUser.getId());
 
@@ -664,8 +669,8 @@ public class ReservationService {
     }
 
     private long calculateNights(
-            LocalDateTime startDate,
-            LocalDateTime endDate,
+            @NonNull LocalDateTime startDate,
+            @NonNull LocalDateTime endDate,
             Long accommodationId) {
 
         long nights = ChronoUnit.DAYS.between(
@@ -682,14 +687,103 @@ public class ReservationService {
         return nights;
     }
 
-    private BigDecimal calculateTotalPrice(Accommodation accommodation, long nights) {
-        return accommodation.getPricePerNight()
-                .multiply(BigDecimal.valueOf(nights));
+    private BigDecimal calculateTotalPrice(
+            @NonNull Accommodation accommodation,
+            @NonNull LocalDateTime startDate,
+            @NonNull LocalDateTime endDate) {
+
+        LocalDate stayStartDate = startDate.toLocalDate();
+        LocalDate stayEndDateInclusive = endDate.toLocalDate().minusDays(1);
+
+        List<RentalPackage> overlappingPackages = rentalPackageRepository.findOverlappingPackagesForStay(
+                accommodation.getId(),
+                stayStartDate,
+                stayEndDateInclusive
+        );
+
+        BigDecimal totalPrice = BigDecimal.ZERO;
+        LocalDate currentNight = stayStartDate;
+
+        while (currentNight.isBefore(endDate.toLocalDate())) {
+            totalPrice = totalPrice.add(resolveNightlyPrice(
+                    accommodation,
+                    overlappingPackages,
+                    currentNight
+            ));
+            currentNight = currentNight.plusDays(1);
+        }
+
+        return totalPrice;
     }
 
-    private BigDecimal calculateDepositAmount(BigDecimal totalPrice) {
+    private BigDecimal resolveNightlyPrice(
+            @NonNull Accommodation accommodation,
+            @NonNull List<RentalPackage> overlappingPackages,
+            LocalDate nightDate) {
+
+        return overlappingPackages.stream()
+                .filter(rentalPackage -> !nightDate.isBefore(rentalPackage.getStartDate())
+                        && !nightDate.isAfter(rentalPackage.getEndDate()))
+                .findFirst()
+                .map(RentalPackage::getPricePerNight)
+                .orElse(accommodation.getPricePerNight());
+    }
+
+    private @NonNull BigDecimal calculateDepositAmount(@NonNull BigDecimal totalPrice) {
         return totalPrice
                 .multiply(BigDecimal.valueOf(depositPercentage))
                 .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+    }
+
+    private @NonNull BigDecimal calculateBaseTotalPrice(
+            @NonNull Accommodation accommodation,
+            @NonNull LocalDateTime startDate,
+            @NonNull LocalDateTime endDate) {
+
+        long nights = ChronoUnit.DAYS.between(startDate.toLocalDate(), endDate.toLocalDate());
+        return accommodation.getPricePerNight().multiply(BigDecimal.valueOf(nights));
+    }
+
+    private RentalPriceModificationResponseDTO buildRentalPriceModification(
+            BigDecimal baseTotalPrice,
+            BigDecimal finalTotalPrice,
+            java.util.Currency currency) {
+
+        int comparison = finalTotalPrice.compareTo(baseTotalPrice);
+        BigDecimal difference = finalTotalPrice.subtract(baseTotalPrice).abs();
+
+        if (comparison < 0) {
+            return new RentalPriceModificationResponseDTO(
+                    RentalPriceModificationType.SAVED,
+                    difference,
+                    "Has ahorrado " + formatAmountForMessage(difference, currency) + " en esta reserva."
+            );
+        }
+
+        if (comparison > 0) {
+            return new RentalPriceModificationResponseDTO(
+                    RentalPriceModificationType.INCREASED,
+                    difference,
+                    "El precio de esta reserva aumentó " + formatAmountForMessage(difference, currency)
+                            + " por tarifa de temporada."
+            );
+        }
+
+        return new RentalPriceModificationResponseDTO(
+                RentalPriceModificationType.UNCHANGED,
+                BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP),
+                "Esta reserva no tuvo cambios de precio por temporada."
+        );
+    }
+
+    private String formatAmountForMessage(BigDecimal amount, java.util.Currency currency) {
+        NumberFormat formatter = NumberFormat.getNumberInstance(Locale.of("es", "CO"));
+
+        int fractionDigits = amount.stripTrailingZeros().scale() > 0 ? 2 : 0;
+
+        formatter.setMinimumFractionDigits(fractionDigits);
+        formatter.setMaximumFractionDigits(fractionDigits);
+
+        return "$" + formatter.format(amount) + " " + currency.getCurrencyCode();
     }
 }

@@ -272,11 +272,10 @@ public class Accommodation extends Auditable {
         private List<Reservation> reservations;
 
         /**
-         * Rental packages defined by the host for specific date ranges.
+         * Seasonal pricing packages defined by the host for specific date ranges.
          *
          * <p>
-         * Each package overrides the base {@code pricePerNight} for its period
-         * and defines which rental modality is offered.
+         * Each package overrides the base {@code pricePerNight} for its period.
          * Managed via {@code RentalPackageService}.
          * </p>
          */
