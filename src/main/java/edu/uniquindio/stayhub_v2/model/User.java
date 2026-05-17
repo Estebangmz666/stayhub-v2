@@ -58,7 +58,7 @@ import java.util.Set;
  * <ul>
  *   <li>Password must be stored using BCrypt or similar strong hashing algorithm</li>
  *   <li>Password recovery codes expire after a configured time period</li>
- *   <li>Soft-deleted users cannot authenticate but their data is preserved</li>
+ *   <li>Soft-deleted users cannot authenticate, but their data is preserved</li>
  *   <li>Email is used as the primary identifier for authentication</li>
  * </ul>
  *
@@ -243,7 +243,7 @@ public class User extends Auditable {
      *
      * <p>Optional field that stores a reference to the user's avatar image.
      * The image is typically stored in a cloud storage service (e.g., AWS S3,
-     * Cloudinary) and this field contains the public URL.</p>
+     * Cloudinary), and this field contains the public URL.</p>
      *
      * <p><b>Format:</b> Valid HTTPS URL</p>
      * <p><b>Example:</b> {@code https://cdn.stayhub.com/profiles/user123.jpg}</p>
@@ -265,7 +265,7 @@ public class User extends Auditable {
      *   <li>Length: Exactly 6 characters</li>
      *   <li>Format: Alphanumeric or numeric only</li>
      *   <li>Temporary: Valid only until {@link #passwordRecoveryExpiration}</li>
-     *   <li>Single-use: Cleared after successful password reset</li>
+     *   <li>Single-use: Cleared after a successful password reset</li>
      * </ul>
      *
      * <p><b>Security:</b> Store hashed in production, though currently stored

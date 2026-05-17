@@ -1,7 +1,6 @@
 package edu.uniquindio.stayhub_v2.service;
 
 import edu.uniquindio.stayhub_v2.model.User;
-import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -151,7 +150,7 @@ public class JWTService {
      *
      * @param user The authenticated user for whom to generate the token
      * @return A compact JWT token string (format: {@code header.payload.signature})
-     * @throws IllegalArgumentException if user is null or missing required fields
+     * @throws IllegalArgumentException if the user is null or missing required fields
      */
     public String generateToken(User user) {
         log.info("Generating JWT token for user: {}", user.getEmail());
@@ -176,67 +175,6 @@ public class JWTService {
     }
 
     /**
-     * Validates a JWT token by verifying its signature and expiration.
-     *
-     * <p>This method performs cryptographic verification of the token's signature
-     * using the configured secret key and checks that the token has not expired.
-     * It does NOT validate the claims or check if the user still exists.</p>
-     *
-     * <p><b>Validation Steps:</b></p>
-     * <ol>
-     *   <li>Parse the token and verify signature using the secret key</li>
-     *   <li>Check that the token has not expired ({@code exp} claim)</li>
-     *   <li>Verify the token structure is valid</li>
-     * </ol>
-     *
-     * <p><b>Usage Pattern:</b></p>
-     * <pre>{@code
-     * public boolean authenticateRequest(String authHeader) {
-     *     if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-     *         return false;
-     *     }
-     *
-     *     String token = authHeader.substring(7);
-     *     try {
-     *         return jwtService.validateToken(token);
-     *     } catch (ExpiredJwtException e) {
-     *         log.warn("Token expired for request");
-     *         return false;
-     *     } catch (JwtException e) {
-     *         log.warn("Invalid token: {}", e.getMessage());
-     *         return false;
-     *     }
-     * }
-     * }</pre>
-     *
-     * @param token The JWT token string to validate
-     * @return {@code true} if the token is valid (properly signed and not expired)
-     * @throws ExpiredJwtException If the token has expired (exp claim is in the past)
-     * @throws JwtException If the token is invalid (malformed, incorrect signature, or unsupported)
-     */
-    public boolean validateToken(String token) {
-        log.debug("Validating JWT token");
-
-        try {
-            Jwts.parser()
-                    .verifyWith(SECRET_KEY)
-                    .build()
-                    .parseSignedClaims(token);
-
-            log.debug("JWT token validated successfully");
-            return true;
-
-        } catch (ExpiredJwtException e) {
-            log.warn("JWT token expired: {}", e.getMessage());
-            throw e;
-
-        } catch (JwtException e) {
-            log.warn("Invalid JWT token: {}", e.getMessage());
-            throw e;
-        }
-    }
-
-    /**
      * Extracts the user's email (subject) from a JWT token.
      *
      * <p>This method parses the token, verifies its signature, and extracts
@@ -251,9 +189,7 @@ public class JWTService {
      *
      * <p><b>⚠️ Note:</b> This method returns {@code null} for invalid tokens
      * rather than throwing exceptions. This design choice prevents exception
-     * propagation in filter chains but may hide the specific reason for failure.
-     * Consider using {@link #validateToken(String)} first if you need detailed
-     * error information.</p>
+     * propagation in filter chains but may hide the specific reason for failures</p>
      *
      * <p><b>Usage in JWT Filter:</b></p>
      * <pre>{@code
@@ -290,31 +226,6 @@ public class JWTService {
             return null;
         }
     }
-
-    /**
-     * Extracts a specific claim from a JWT token.
-     *
-     * <p>Utility method to retrieve any claim from the token payload.</p>
-     *
-     * @param token The JWT token
-     * @param claimName The name of the claim to extract
-     * @return The claim value, or {@code null} if not present or token invalid
-     */
-    /*
-    public Object getClaimFromToken(String token, String claimName) {
-        try {
-            return Jwts.parser()
-                    .verifyWith(SECRET_KEY)
-                    .build()
-                    .parseSignedClaims(token)
-                    .getPayload()
-                    .get(claimName);
-        } catch (JwtException e) {
-            log.warn("Failed to extract claim '{}' from token: {}", claimName, e.getMessage());
-            return null;
-        }
-    }
-    */
 
     /*
      * Additional methods that could be added in the future:

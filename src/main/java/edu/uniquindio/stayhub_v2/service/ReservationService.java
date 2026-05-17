@@ -9,6 +9,7 @@ import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.UpdateReservationRequestDTO;
 import edu.uniquindio.stayhub_v2.event.ReservationCancelledEvent;
+import edu.uniquindio.stayhub_v2.event.ReservationCompletedEvent;
 import edu.uniquindio.stayhub_v2.event.ReservationCreatedEvent;
 import edu.uniquindio.stayhub_v2.exception.AccommodationNotFoundException;
 import edu.uniquindio.stayhub_v2.exception.DepositNotPaidException;
@@ -492,6 +493,27 @@ public class ReservationService {
         return expiredReservations.size();
     }
 
+    @Transactional
+    public int completePastReservations() {
+
+        LocalDateTime now = LocalDateTime.now();
+        List<Reservation> reservationsToComplete =
+                reservationRepository.findReservationsToComplete(now);
+
+        reservationsToComplete.forEach(reservation -> {
+            reservation.setStatus(ReservationStatus.COMPLETED);
+            Reservation completedReservation = reservationRepository.save(reservation);
+            applicationEventPublisher.publishEvent(new ReservationCompletedEvent(completedReservation));
+
+            log.info("Reservation {} marked as completed because end date has passed",
+                    reservation.getId());
+
+            log.debug("ReservationCompletedEvent published with id: {}", completedReservation.getId());
+        });
+
+        return reservationsToComplete.size();
+    }
+
     /**
      * Retrieves the full detail of a single reservation by its ID.
      * Both HOST and GUEST can call this endpoint.
@@ -668,7 +690,7 @@ public class ReservationService {
         }
     }
 
-    private long calculateNights(
+    private void calculateNights(
             @NonNull LocalDateTime startDate,
             @NonNull LocalDateTime endDate,
             Long accommodationId) {
@@ -684,7 +706,6 @@ public class ReservationService {
             throw new IllegalArgumentException("Reservation must be at least one night");
         }
 
-        return nights;
     }
 
     private BigDecimal calculateTotalPrice(

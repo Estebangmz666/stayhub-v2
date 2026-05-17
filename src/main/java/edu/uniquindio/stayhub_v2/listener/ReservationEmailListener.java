@@ -1,5 +1,6 @@
 package edu.uniquindio.stayhub_v2.listener;
 
+import edu.uniquindio.stayhub_v2.event.ReservationCompletedEvent;
 import edu.uniquindio.stayhub_v2.event.ReservationCreatedEvent;
 import edu.uniquindio.stayhub_v2.event.ReservationCancelledEvent;
 import edu.uniquindio.stayhub_v2.exception.EmailNotificationException;
@@ -9,11 +10,13 @@ import edu.uniquindio.stayhub_v2.model.User;
 import edu.uniquindio.stayhub_v2.service.EmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.thymeleaf.context.Context;
 
+import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -30,13 +33,16 @@ import java.util.concurrent.CompletableFuture;
  *   <li>All errors are wrapped in custom exceptions with contextual information</li>
  * </ul>
  *
- * @author Esteban Gómez León
+ * @author StayHub Dev Team
  * @version 1.0
  */
 @Component @RequiredArgsConstructor @Slf4j
 public class ReservationEmailListener {
 
     private final EmailService emailService;
+
+    @Value("${stayhub.frontend.url}")
+    private String frontendUrl;
 
     /**
      * Handles the reservation-created event by sending confirmation emails
@@ -113,6 +119,107 @@ public class ReservationEmailListener {
         } catch (Exception e) {
             log.error("Critical error in cancellation email notification handler for reservation: {}. Error: {}",
                     event.reservation().getId(), e.getMessage(), e);
+        }
+    }
+
+    @Async
+    @EventListener
+    public void handleReservationCompleted(ReservationCompletedEvent event) {
+        log.info("Processing reservation completed email notification for reservation ID: {}",
+                event.reservation().getId());
+
+        try {
+            Reservation reservation = event.reservation();
+            User guest = reservation.getGuest();
+            Accommodation accommodation = reservation.getAccommodation();
+            User host = accommodation.getHost();
+
+            validateEmailData(guest, host, accommodation, reservation);
+
+            sendCompletedReservationEmailToGuestSafely(guest, accommodation, reservation);
+            sendCompletedReservationEmailToHostSafely(host, guest, accommodation, reservation);
+
+            log.info("Reservation completed email notification completed for reservation ID: {}",
+                    reservation.getId());
+        } catch (Exception e) {
+            log.error("Critical error in reservationCompleted email notification handler for reservation: {}. Error: {}",
+                    event.reservation().getId(), e.getMessage(), e);
+        }
+    }
+
+    private void sendCompletedReservationEmailToGuestSafely(
+            User guest,
+            Accommodation accommodation,
+            Reservation reservation) {
+
+        log.info("Attempting to send completed-stay email to guest: {}", guest.getEmail());
+
+        try {
+            validateEmailRecipient(guest);
+
+            Context context = buildCompletedReservationGuestEmailContext(
+                    guest,
+                    accommodation,
+                    reservation
+            );
+
+            emailService.sendEmailWithTemplate(
+                    guest.getEmail(),
+                    "Tu estadía en " + accommodation.getTitle() + " ha finalizado",
+                    "reservation-completed-guest",
+                    context
+            );
+
+            log.info("Completed-stay email sent successfully to guest: {}", guest.getEmail());
+        } catch (EmailNotificationException e) {
+            log.error("Failed to send completed-stay email to guest {} for reservation {}: {}",
+                    guest.getEmail(), reservation.getId(), e.getMessage());
+            handleEmailFailure(guest, reservation, "guest completed-stay notification");
+        } catch (Exception e) {
+            log.error("Unexpected error sending completed-stay email to guest {} for reservation {}: {}",
+                    guest.getEmail(), reservation.getId(), e.getMessage(), e);
+            throw new EmailNotificationException(
+                    String.format("Unexpected error sending completed-stay email to guest %s",
+                            guest.getEmail()), e);
+        }
+    }
+
+    private void sendCompletedReservationEmailToHostSafely(
+            User host,
+            User guest,
+            Accommodation accommodation,
+            Reservation reservation) {
+
+        log.info("Attempting to send completed-stay notification email to host: {}", host.getEmail());
+
+        try {
+            validateEmailRecipient(host);
+
+            Context context = buildCompletedReservationHostEmailContext(
+                    host,
+                    guest,
+                    accommodation,
+                    reservation
+            );
+
+            emailService.sendEmailWithTemplate(
+                    host.getEmail(),
+                    "La reserva en " + accommodation.getTitle() + " ha finalizado",
+                    "reservation-completed-host",
+                    context
+            );
+
+            log.info("Completed-stay notification email sent successfully to host: {}", host.getEmail());
+        } catch (EmailNotificationException e) {
+            log.error("Failed to send completed-stay email to host {} for reservation {}: {}",
+                    host.getEmail(), reservation.getId(), e.getMessage());
+            handleEmailFailure(host, reservation, "host completed-stay notification");
+        } catch (Exception e) {
+            log.error("Unexpected error sending completed-stay email to host {} for reservation {}: {}",
+                    host.getEmail(), reservation.getId(), e.getMessage(), e);
+            throw new EmailNotificationException(
+                    String.format("Unexpected error sending completed-stay email to host %s",
+                            host.getEmail()), e);
         }
     }
 
@@ -281,6 +388,68 @@ public class ReservationEmailListener {
         return context;
     }
 
+    private Context buildCompletedReservationGuestEmailContext(
+            User guest,
+            Accommodation accommodation,
+            Reservation reservation) {
+        Context context = new Context();
+
+        try {
+            context.setVariable("guestName", guest.getFullName() != null
+                    ? guest.getFullName()
+                    : "Huésped");
+            context.setVariable("accommodationTitle", accommodation.getTitle());
+            context.setVariable("startDate", formatDate(reservation.getStartDate()));
+            context.setVariable("endDate", formatDate(reservation.getEndDate()));
+            context.setVariable("reservationId", reservation.getId());
+            context.setVariable("reviewUrl", buildReviewUrl(reservation));
+
+            log.debug("Completed guest email context built successfully for user: {}", guest.getEmail());
+        } catch (Exception e) {
+            log.error("Error building completed guest email context: {}", e.getMessage(), e);
+            throw new EmailNotificationException("Failed to build completed guest email context", e);
+        }
+
+        return context;
+    }
+
+    private Context buildCompletedReservationHostEmailContext(
+            User host,
+            User guest,
+            Accommodation accommodation,
+            Reservation reservation) {
+        Context context = new Context();
+
+        try {
+            context.setVariable("hostName", host.getFullName() != null
+                    ? host.getFullName()
+                    : "Anfitrión");
+            context.setVariable("guestName", guest.getFullName() != null
+                    ? guest.getFullName()
+                    : "Huésped");
+            context.setVariable("accommodationTitle", accommodation.getTitle());
+            context.setVariable("startDate", formatDate(reservation.getStartDate()));
+            context.setVariable("endDate", formatDate(reservation.getEndDate()));
+            context.setVariable("reservationId", reservation.getId());
+
+            log.debug("Completed host email context built successfully for user: {}", host.getEmail());
+        } catch (Exception e) {
+            log.error("Error building completed host email context: {}", e.getMessage(), e);
+            throw new EmailNotificationException("Failed to build completed host email context", e);
+        }
+
+        return context;
+    }
+
+    private String buildReviewUrl(Reservation reservation) {
+        return String.format(
+                "%s/dashboard/guest/reviews?accommodationId=%d&reservationId=%d",
+                frontendUrl,
+                reservation.getAccommodation().getId(),
+                reservation.getId()
+        );
+    }
+
     /**
      * Validates that all required data from the event is present.
      */
@@ -365,7 +534,7 @@ public class ReservationEmailListener {
         if (price == null) return "Precio no disponible";
         try {
             java.text.NumberFormat currencyFormat =
-                    java.text.NumberFormat.getCurrencyInstance(new java.util.Locale("es", "CO"));
+                    java.text.NumberFormat.getCurrencyInstance(Locale.of("es", "CO"));
             return currencyFormat.format(price);
         } catch (Exception e) {
             log.warn("Error formatting price: {}", e.getMessage());

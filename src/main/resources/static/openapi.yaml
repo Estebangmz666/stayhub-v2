@@ -1369,6 +1369,43 @@ components:
         - birthDate
         - profilePicture
 
+    UserProfileResponse:
+      type: object
+      description: Response body returned when retrieving the authenticated user's profile.
+      properties:
+        email:
+          type: string
+          format: email
+          example: john.doe@example.com
+        roles:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Role'
+          example:
+            - GUEST
+        fullName:
+          type: string
+          example: John Giggity Doe
+        phoneNumber:
+          type: string
+          example: +573101234567
+        birthDate:
+          type: string
+          format: date
+          example: '1990-01-01'
+        profilePicture:
+          type: string
+          format: uri
+          example: https://example.com/profile.jpg
+      required:
+        - email
+        - roles
+        - fullName
+        - phoneNumber
+        - birthDate
+        - profilePicture
+
     UserLoginRequest:
       type: object
       properties:
