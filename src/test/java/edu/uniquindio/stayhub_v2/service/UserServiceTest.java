@@ -23,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
@@ -77,7 +78,7 @@ public class UserServiceTest {
     @Test
     void loginUser_ValidCredentials_ReturnsToken() {
         UserLoginRequestDTO request = new UserLoginRequestDTO("test@mail.com", "Password123!");
-        when(userRepository.findByEmail(request.email())).thenReturn(Optional.of(testUser));
+        when(userRepository.findByEmailAndDeletedFalse(request.email())).thenReturn(Optional.of(testUser));
         when(passwordEncoder.matches(request.password(), testUser.getPassword())).thenReturn(true);
         when(jwtService.generateToken(testUser)).thenReturn("fake-jwt-token");
 
@@ -90,7 +91,7 @@ public class UserServiceTest {
     @Test
     void loginUser_InvalidPassword_ThrowsException() {
         UserLoginRequestDTO request = new UserLoginRequestDTO("test@mail.com", "WrongPassword!");
-        when(userRepository.findByEmail(request.email())).thenReturn(Optional.of(testUser));
+        when(userRepository.findByEmailAndDeletedFalse(request.email())).thenReturn(Optional.of(testUser));
         when(passwordEncoder.matches(request.password(), testUser.getPassword())).thenReturn(false);
 
         assertThatThrownBy(() -> userService.loginUser(request))
@@ -100,16 +101,26 @@ public class UserServiceTest {
     @Test
     void loginUser_UserNotFound_ThrowsException() {
         UserLoginRequestDTO request = new UserLoginRequestDTO("notfound@mail.com", "Password123!");
-        when(userRepository.findByEmail(request.email())).thenReturn(Optional.empty());
+        when(userRepository.findByEmailAndDeletedFalse(request.email())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> userService.loginUser(request))
                 .isInstanceOf(InvalidPasswordException.class);
     }
 
     @Test
+    void loginUser_DeletedUser_ThrowsException() {
+        UserLoginRequestDTO request = new UserLoginRequestDTO("test@mail.com", "Password123!");
+        when(userRepository.findByEmailAndDeletedFalse(request.email())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.loginUser(request))
+                .isInstanceOf(InvalidPasswordException.class)
+                .hasMessageContaining("Invalid credentials");
+    }
+
+    @Test
     void forgotPassword_ValidEmail_GeneratesCodeAndSendsEmail() {
         ForgotPasswordRequestDTO request = new ForgotPasswordRequestDTO("test@mail.com");
-        when(userRepository.findByEmail(request.email())).thenReturn(Optional.of(testUser));
+        when(userRepository.findByEmailAndDeletedFalse(request.email())).thenReturn(Optional.of(testUser));
 
         userService.forgotPassword(request);
 
@@ -128,7 +139,7 @@ public class UserServiceTest {
 
         ResetPasswordRequestDTO request =
                 new ResetPasswordRequestDTO("test@mail.com", "123456", "NewPassword123!");
-        when(userRepository.findByEmail(request.email())).thenReturn(Optional.of(testUser));
+        when(userRepository.findByEmailAndDeletedFalse(request.email())).thenReturn(Optional.of(testUser));
         when(passwordEncoder.encode(request.newPassword())).thenReturn("new_encoded_password");
 
         userService.resetPassword(request);
@@ -147,7 +158,7 @@ public class UserServiceTest {
 
         ResetPasswordRequestDTO request =
                 new ResetPasswordRequestDTO("test@mail.com", "999999", "NewPassword123!");
-        when(userRepository.findByEmail(request.email())).thenReturn(Optional.of(testUser));
+        when(userRepository.findByEmailAndDeletedFalse(request.email())).thenReturn(Optional.of(testUser));
 
         assertThatThrownBy(() -> userService.resetPassword(request))
                 .isInstanceOf(InvalidRecoveryCodeException.class)
@@ -161,7 +172,7 @@ public class UserServiceTest {
 
         ResetPasswordRequestDTO request =
                 new ResetPasswordRequestDTO("test@mail.com", "123456", "NewPassword123!");
-        when(userRepository.findByEmail(request.email())).thenReturn(Optional.of(testUser));
+        when(userRepository.findByEmailAndDeletedFalse(request.email())).thenReturn(Optional.of(testUser));
 
         assertThatThrownBy(() -> userService.resetPassword(request))
                 .isInstanceOf(InvalidRecoveryCodeException.class)
@@ -182,9 +193,9 @@ public class UserServiceTest {
 
         SecurityContextHolder.setContext(securityContext);
 
-        when(userRepository.findByEmailWithRoles(testUser.getEmail()))
+        when(userRepository.findByEmailAndDeletedFalseWithRoles(testUser.getEmail()))
                 .thenReturn(Optional.of(testUser));
-        when(userRepository.findByEmail(testUser.getEmail()))
+        when(userRepository.findByEmailAndDeletedFalse(testUser.getEmail()))
                 .thenReturn(Optional.of(testUser));
         when(passwordEncoder.matches(request.currentPassword(), testUser.getPassword()))
                 .thenReturn(true);
@@ -194,8 +205,8 @@ public class UserServiceTest {
         userService.changePassword(request);
 
         assertThat(testUser.getPassword()).isEqualTo("new_encoded_password");
-        verify(userRepository).findByEmailWithRoles(testUser.getEmail());
-        verify(userRepository).findByEmail(testUser.getEmail());
+        verify(userRepository).findByEmailAndDeletedFalseWithRoles(testUser.getEmail());
+        verify(userRepository).findByEmailAndDeletedFalse(testUser.getEmail());
         verify(userRepository).save(testUser);
     }
 
@@ -213,9 +224,9 @@ public class UserServiceTest {
 
         SecurityContextHolder.setContext(securityContext);
 
-        when(userRepository.findByEmailWithRoles(testUser.getEmail()))
+        when(userRepository.findByEmailAndDeletedFalseWithRoles(testUser.getEmail()))
                 .thenReturn(Optional.of(testUser));
-        when(userRepository.findByEmail(testUser.getEmail()))
+        when(userRepository.findByEmailAndDeletedFalse(testUser.getEmail()))
                 .thenReturn(Optional.of(testUser));
         when(passwordEncoder.matches(request.currentPassword(), testUser.getPassword()))
                 .thenReturn(false);
@@ -224,8 +235,8 @@ public class UserServiceTest {
                 .isInstanceOf(InvalidPasswordException.class)
                 .hasMessageContaining("incorrecta");
 
-        verify(userRepository).findByEmailWithRoles(testUser.getEmail());
-        verify(userRepository).findByEmail(testUser.getEmail());
+        verify(userRepository).findByEmailAndDeletedFalseWithRoles(testUser.getEmail());
+        verify(userRepository).findByEmailAndDeletedFalse(testUser.getEmail());
         verify(passwordEncoder).matches("WrongPassword!", testUser.getPassword());
         verify(passwordEncoder, never()).encode(anyString());
         verify(userRepository, never()).save(any());
@@ -245,9 +256,9 @@ public class UserServiceTest {
 
         SecurityContextHolder.setContext(securityContext);
 
-        when(userRepository.findByEmailWithRoles(testUser.getEmail()))
+        when(userRepository.findByEmailAndDeletedFalseWithRoles(testUser.getEmail()))
                 .thenReturn(Optional.of(testUser));
-        when(userRepository.findByEmail(testUser.getEmail()))
+        when(userRepository.findByEmailAndDeletedFalse(testUser.getEmail()))
                 .thenReturn(Optional.of(testUser));
         when(passwordEncoder.matches(request.currentPassword(), testUser.getPassword()))
                 .thenReturn(true);
@@ -257,11 +268,30 @@ public class UserServiceTest {
         userService.changePassword(request);
 
         assertThat(testUser.getPassword()).isEqualTo("new_encoded_password");
-        verify(userRepository).findByEmailWithRoles(testUser.getEmail());
-        verify(userRepository).findByEmail(testUser.getEmail());
+        verify(userRepository).findByEmailAndDeletedFalseWithRoles(testUser.getEmail());
+        verify(userRepository).findByEmailAndDeletedFalse(testUser.getEmail());
         verify(passwordEncoder).matches("OldPassword123!", "encoded_password");
         verify(passwordEncoder).encode("NuevaContraseña01!");
         verify(userRepository).save(testUser);
+    }
+
+    @Test
+    void getCurrentUser_DeletedAuthenticatedUser_ThrowsUsernameNotFoundException() {
+        Authentication authentication = mock(Authentication.class);
+        SecurityContext securityContext = mock(SecurityContext.class);
+
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        when(authentication.isAuthenticated()).thenReturn(true);
+        when(authentication.getPrincipal()).thenReturn(testUser);
+
+        SecurityContextHolder.setContext(securityContext);
+
+        when(userRepository.findByEmailAndDeletedFalseWithRoles(testUser.getEmail()))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.getCurrentUser())
+                .isInstanceOf(UsernameNotFoundException.class)
+                .hasMessageContaining(testUser.getEmail());
     }
 
     @Test

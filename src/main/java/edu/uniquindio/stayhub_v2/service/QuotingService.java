@@ -58,7 +58,7 @@ public class QuotingService {
      *
      * @throws ReservationPolicyViolationException if the reservation does not meet the minimum anticipation policy
      * @throws AccommodationNotFoundException if the accommodation does not exist, is deleted, or is unavailable
-     * @throws IllegalStateException if the accommodation is already booked for the selected date range
+     * @throws AccommodationAlreadyBookedException if the accommodation is already booked for the selected date range
      * @throws ArithmeticException if the calculated number of nights cannot be safely converted to an {@code int}
      */
     @Transactional(readOnly = true)

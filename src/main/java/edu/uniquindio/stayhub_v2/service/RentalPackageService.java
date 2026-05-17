@@ -42,7 +42,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class RentalPackageService {
 
-    /** Sentinel value used on create to exclude no existing package from overlap check. */
+    /** Sentinel value used on creation to exclude no existing package from overlap check. */
     private static final long NO_EXCLUDE_ID = -1L;
 
     private final RentalPackageRepository rentalPackageRepository;
@@ -169,7 +169,7 @@ public class RentalPackageService {
      * <p>This is a read-only operation available to any authenticated user.</p>
      *
      * @param accommodationId target accommodation
-     * @return list of package response DTOs (may be empty)
+     * @return list of package response DTOs (maybe empty)
      * @throws AccommodationNotFoundException if the accommodation does not exist or is deleted
      */
     @Transactional(readOnly = true)

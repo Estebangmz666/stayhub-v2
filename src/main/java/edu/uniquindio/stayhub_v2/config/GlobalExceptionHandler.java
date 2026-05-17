@@ -140,6 +140,15 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(AccommodationAlreadyBookedException.class)
+    public ResponseEntity<Error> handleAccommodationAlreadyBookedException(AccommodationAlreadyBookedException e) {
+        log.warn("Accommodation already booked: {}", e.getMessage());
+        return new ResponseEntity<>(
+                new Error(e.getMessage(), HttpStatus.CONFLICT.value()),
+                HttpStatus.CONFLICT
+        );
+    }
+
     /**
      * Handles validation exceptions from {@code @Valid} annotated request bodies.
      *

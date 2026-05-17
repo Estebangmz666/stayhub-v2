@@ -99,7 +99,7 @@ import java.util.Random;
  *
  * @author Stayhub Dev Team
  * @version 1.0
- * @since 1.0
+ * @since 1.1
  * @see UserRepository
  * @see JWTService
  * @see EmailService
@@ -161,13 +161,13 @@ public class UserService {
         if (principal instanceof org.springframework.security.core.userdetails.UserDetails userDetails) {
             String email = userDetails.getUsername();
 
-            return userRepository.findByEmailWithRoles(email)
+            return userRepository.findByEmailAndDeletedFalseWithRoles(email)
                     .orElseThrow(() -> new UsernameNotFoundException(
                             "User not found with email: " + email));
         }
 
         if (principal instanceof User user) {
-            return userRepository.findByEmailWithRoles(user.getEmail())
+            return userRepository.findByEmailAndDeletedFalseWithRoles(user.getEmail())
                     .orElseThrow(() -> new UsernameNotFoundException(
                             "User not found with email: " + user.getEmail()));
         }
@@ -306,7 +306,7 @@ public class UserService {
         log.info("Processing login request for email: {}", userLoginRequestDTO.email());
 
         // Find the user by email
-        User user = userRepository.findByEmail(userLoginRequestDTO.email())
+        User user = userRepository.findByEmailAndDeletedFalse(userLoginRequestDTO.email())
                 .orElseThrow(() -> {
                     log.warn("Login failed: User not found with email: {}", userLoginRequestDTO.email());
                     return new InvalidPasswordException("Invalid credentials");
@@ -374,7 +374,7 @@ public class UserService {
         log.info("Processing forgot password request for email: {}", requestDTO.email());
 
         // Find the user by email
-        User user = userRepository.findByEmail(requestDTO.email())
+        User user = userRepository.findByEmailAndDeletedFalse(requestDTO.email())
                 .orElseThrow(() -> {
                     log.warn("Forgot password failed: User not found with email: {}", requestDTO.email());
                     return new UserNotFoundException("User not found");
@@ -436,7 +436,7 @@ public class UserService {
         log.info("Processing reset password request for email: {}", requestDTO.email());
 
         // Find the user by email
-        User user = userRepository.findByEmail(requestDTO.email())
+        User user = userRepository.findByEmailAndDeletedFalse(requestDTO.email())
                 .orElseThrow(() -> {
                     log.warn("Reset password failed: User not found with email: {}", requestDTO.email());
                     return new UserNotFoundException("User not found");
@@ -518,7 +518,7 @@ public class UserService {
         User currentUser = getCurrentUser();
         String currentUserEmail = currentUser.getEmail();
 
-        User user = userRepository.findByEmail(currentUserEmail)
+        User user = userRepository.findByEmailAndDeletedFalse(currentUserEmail)
                 .orElseThrow(() -> new UserNotFoundException("User not found"));
 
         if (!passwordEncoder.matches(requestDTO.currentPassword(), user.getPassword())) {
@@ -539,7 +539,7 @@ public class UserService {
      * preserving the existing values for fields that are not included in the request.</p>
      *
      * <p>The update is limited to non-critical profile attributes such as full name,
-     * phone number, birth date, and profile picture. It does not update authentication
+     * phone number, birthdate, and profile picture. It does not update authentication
      * data such as email, password, roles, or account status.</p>
      *
      * @param userProfileUpdateRequestDTO the request DTO containing the profile fields to update
@@ -602,21 +602,24 @@ public class UserService {
         }
     }
 
+    @Transactional
+    public void softDeleteCurrentUser() {
+        User currentUser = getCurrentUser();
+
+        if (currentUser.isDeleted()) {
+            throw new UserNotFoundException("User not found");
+        }
+
+        currentUser.setDeleted(true);
+
+        userRepository.save(currentUser);
+
+        log.info("User account soft deleted successfully for user: {} with id: {}",
+                currentUser.getEmail(), currentUser.getId());
+    }
+
     /*
      * Additional methods that could be added in the future:
-     *
-     * // Soft delete user account
-     * @Transactional
-     * public void deactivateAccount(String password) {
-     *     User user = getCurrentUser();
-     *
-     *     if (!passwordEncoder.matches(password, user.getPassword())) {
-     *         throw new InvalidPasswordException("Invalid password");
-     *     }
-     *
-     *     user.setDeleted(true);
-     *     userRepository.save(user);
-     * }
      *
      * // Resend verification email
      * public void resendVerificationEmail(String email) {

@@ -6,6 +6,7 @@ import edu.uniquindio.stayhub_v2.dto.reservation.quoting.ReservationQuoteBreakdo
 import edu.uniquindio.stayhub_v2.dto.reservation.quoting.ReservationQuoteRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.quoting.ReservationQuoteResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.quoting.SourceType;
+import edu.uniquindio.stayhub_v2.exception.AccommodationAlreadyBookedException;
 import edu.uniquindio.stayhub_v2.exception.AccommodationNotFoundException;
 import edu.uniquindio.stayhub_v2.exception.ReservationPolicyViolationException;
 import edu.uniquindio.stayhub_v2.model.Accommodation;
@@ -127,7 +128,7 @@ class QuotingServiceTest {
     }
 
     @Test
-    void quoteReservation_OverlappingDates_ThrowsIllegalStateException() {
+    void quoteReservation_OverlappingDates_ThrowsAccommodationAlreadyBookedException() {
         LocalDateTime start = LocalDateTime.now().plusDays(10);
         LocalDateTime end = start.plusDays(2);
         ReservationQuoteRequestDTO request = new ReservationQuoteRequestDTO(10L, start, end);
@@ -136,7 +137,7 @@ class QuotingServiceTest {
         when(reservationRepository.existsByAccommodationIdAndDateRange(eq(10L), eq(start), eq(end))).thenReturn(true);
 
         assertThatThrownBy(() -> quotingService.quoteReservation(request))
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(AccommodationAlreadyBookedException.class)
                 .hasMessageContaining("already booked");
 
         verify(reservationService, never()).calculateReservationPricing(any(), any(), any());

@@ -363,14 +363,6 @@ public class AccommodationService {
     /*
      * Additional methods that could be added in the future:
      *
-     * // Create a new accommodation
-     * @Transactional
-     * public AccommodationResponseDTO createAccommodation(
-     *         AccommodationCreateRequestDTO request,
-     *         String hostEmail) {
-     *     // Implementation
-     * }
-     *
      * // Update accommodation details
      * @Transactional
      * public AccommodationResponseDTO updateAccommodation(
@@ -391,17 +383,7 @@ public class AccommodationService {
      *         AccommodationSearchCriteria criteria,
      *         Pageable pageable) {
      *     // Implementation with pagination
-     * }
-     *
-     * // Check availability for date range
-     * public boolean isAccommodationAvailable(
-     *         Long accommodationId,
-     *         LocalDateTime startDate,
-     *         LocalDateTime endDate) {
-     *     return !reservationRepository.existsByAccommodationIdAndDateRange(
-     *             accommodationId, startDate, endDate);
-     * }
-     *
+     *          }
      * // Get accommodations by host
      * public List<AccommodationSummaryDTO> getAccommodationsByHost(String hostEmail) {
      *     // Implementation

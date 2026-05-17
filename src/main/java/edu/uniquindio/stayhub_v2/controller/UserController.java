@@ -324,9 +324,14 @@ public class UserController {
             @Valid @RequestBody UserProfileUpdateRequestDTO userProfileUpdateRequestDTO
     ) {
         log.info("Processing user profile update request");
-
         UserProfileUpdateResponseDTO userProfileUpdateResponseDTO = userService.updateUserProfile(userProfileUpdateRequestDTO);
-
         return ResponseEntity.ok(userProfileUpdateResponseDTO);
+    }
+
+    @DeleteMapping("/me")
+    public ResponseEntity<MessageResponseDTO> deleteMyAccount(){
+            log.info("Processing delete my account request");
+            userService.softDeleteCurrentUser();
+            return ResponseEntity.ok(new MessageResponseDTO("Your account has been deleted successfully. Hope to see you again soon!"));
     }
 }

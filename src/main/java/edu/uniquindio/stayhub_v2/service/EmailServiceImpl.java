@@ -132,7 +132,7 @@ public class EmailServiceImpl implements EmailService {
      *   <li>Process Thymeleaf template with provided context variables</li>
      *   <li>Create a MIME message with HTML content</li>
      *   <li>Set UTF-8 encoding for proper character support</li>
-     *   <li>Send via configured SMTP server</li>
+     *   <li>Send it via a configured SMTP server</li>
      * </ol>
      *
      * <p><b>Error Handling:</b></p>
@@ -160,7 +160,7 @@ public class EmailServiceImpl implements EmailService {
      * @param subject The email subject line (supports Unicode/UTF-8)
      * @param templateName The name of the Thymeleaf template without {@code .html} extension
      * @param context The Thymeleaf context containing template variables
-     * @throws EmailSendException if the email fails to send due to network,
+     * @throws EmailSendException if the email fails to send it due to network,
      *                            authentication, or template processing errors
      */
     @Override
