@@ -43,6 +43,20 @@ public interface RentalPackageRepository extends JpaRepository<RentalPackage, Lo
      */
     Optional<RentalPackage> findByIdAndAccommodationId(Long id, Long accommodationId);
 
+    @Query("""
+            SELECT p
+            FROM RentalPackage p
+            WHERE p.accommodation.id = :accommodationId
+              AND p.startDate <= :stayEndDate
+              AND p.endDate >= :stayStartDate
+            ORDER BY p.startDate ASC
+            """)
+    List<RentalPackage> findOverlappingPackagesForStay(
+            @Param("accommodationId") Long accommodationId,
+            @Param("stayStartDate") LocalDate stayStartDate,
+            @Param("stayEndDate") LocalDate stayEndDate
+    );
+
     /**
      * Checks whether any package for the given accommodation overlaps with
      * the supplied date range, optionally excluding a specific package

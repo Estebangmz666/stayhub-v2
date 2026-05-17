@@ -36,6 +36,8 @@ import java.util.Currency;
  *                           transfer the deposit.
  * @param paymentDeadline    The deadline (3 days from booking) by which the
  *                           deposit must be paid.
+ * @param rentalPriceModification Summary of how seasonal pricing modified the
+ *                                reservation total compared to the base rate.
  *
  * @author StayHub Dev Team
  * @version 1.1
@@ -66,7 +68,9 @@ public record CreateReservationResponseDTO(
 
                 @NotNull @Schema(description = "Bank account number where the deposit must be transferred", example = "3001234567890") String bankAccountNumber,
 
-                @NotNull @Schema(description = "Deadline to pay the deposit (3 days from reservation creation)", example = "2025-04-18T23:59:59") LocalDateTime paymentDeadline
+                @NotNull @Schema(description = "Deadline to pay the deposit (3 days from reservation creation)", example = "2025-04-18T23:59:59") LocalDateTime paymentDeadline,
+
+                @NotNull @Schema(description = "Summary of the seasonal pricing effect on this reservation") RentalPriceModificationResponseDTO rentalPriceModification
 
 ) {
 }

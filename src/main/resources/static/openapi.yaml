@@ -12,7 +12,7 @@ tags:
   - name: Accommodations
     description: Accommodation creation, search, retrieval and soft delete endpoints.
   - name: Rental Packages
-    description: CRUD of rental packages per accommodation. Package price replaces the accommodation base nightly rate for the package date range.
+    description: Seasonal pricing packages per accommodation. Each package defines a `pricePerNight` that replaces the accommodation base nightly rate for nights inside the package date range.
   - name: Bookings
     description: Reservation creation and reservation management endpoints.
   - name: Reviews
@@ -432,12 +432,13 @@ paths:
         - Rental Packages
       summary: Create rental package
       description: |
-        Creates a new rental package for the specified accommodation.
+        Creates a seasonal pricing package for the specified accommodation.
 
         **Business rules:**
         - Caller must have the HOST role and own the accommodation.
         - The package date range must not overlap any existing package for the same accommodation.
-        - The `price` replaces the accommodation's base `pricePerNight` for the entire package period.
+        - The `pricePerNight` replaces the accommodation base `pricePerNight` for each reservation night that falls inside the package range.
+        - If a reservation is partially inside and partially outside the package, the backend calculates the total night by night.
       operationId: createRentalPackage
       security:
         - bearerAuth: []
@@ -497,7 +498,7 @@ paths:
       tags:
         - Rental Packages
       summary: List rental packages
-      description: Returns all rental packages for the given accommodation ordered by start date. Available to any authenticated user.
+      description: Returns all seasonal pricing packages for the given accommodation ordered by start date. Available to any authenticated user.
       operationId: getRentalPackages
       security:
         - bearerAuth: []
@@ -538,7 +539,7 @@ paths:
         - Rental Packages
       summary: Update rental package
       description: |
-        Partially updates a rental package. Only non-null fields are applied.
+        Partially updates a seasonal pricing package. Only non-null fields are applied.
 
         **Business rules:**
         - Caller must have the HOST role and own the accommodation.
@@ -610,7 +611,7 @@ paths:
       tags:
         - Rental Packages
       summary: Delete rental package
-      description: Permanently deletes a rental package. Caller must have the HOST role and own the accommodation.
+      description: Permanently deletes a seasonal pricing package. Caller must have the HOST role and own the accommodation.
       operationId: deleteRentalPackage
       security:
         - bearerAuth: []
@@ -663,12 +664,15 @@ paths:
         - Bookings
       summary: Create a new accommodation reservation
       description: |
-        Creates a reservation for an accommodation.
+        Creates a reservation for a full accommodation stay.
 
         Business notes:
         - reservations must be created at least 72 hours before check-in,
         - overlapping active reservations are rejected,
-        - the response includes the deposit amount, bank account number and payment deadline.
+        - the accommodation base `pricePerNight` applies by default,
+        - if one or more nights fall inside a seasonal pricing package, those nights use the package `pricePerNight`,
+        - if the stay is partially inside and partially outside a package, the backend calculates a mixed total night by night,
+        - the response includes the deposit amount, bank account number, payment deadline, and a `rentalPriceModification` summary for the frontend.
       operationId: bookAccommodation
       security:
         - bearerAuth: []
@@ -1886,6 +1890,8 @@ components:
           type: string
           format: date-time
           example: '2025-04-18T23:59:59'
+        rentalPriceModification:
+          $ref: '#/components/schemas/RentalPriceModificationResponse'
       required:
         - id
         - startDate
@@ -1899,6 +1905,36 @@ components:
         - depositAmount
         - bankAccountNumber
         - paymentDeadline
+        - rentalPriceModification
+
+    RentalPriceModificationType:
+      type: string
+      description: Whether seasonal pricing made the reservation cheaper, more expensive, or left it unchanged compared to the accommodation base nightly rate.
+      enum:
+        - SAVED
+        - INCREASED
+        - UNCHANGED
+      example: SAVED
+
+    RentalPriceModificationResponse:
+      type: object
+      description: Summary of the seasonal pricing effect applied when the reservation was created.
+      properties:
+        type:
+          $ref: '#/components/schemas/RentalPriceModificationType'
+        amount:
+          type: number
+          format: double
+          description: Absolute difference between the base total price and the final total price after applying seasonal pricing.
+          example: 60000.00
+        message:
+          type: string
+          description: User-facing message in Spanish intended for direct display in the frontend.
+          example: Has ahorrado $60.000 COP en esta reserva.
+      required:
+        - type
+        - amount
+        - message
 
     RetrieveReservationResponse:
       type: object
@@ -2262,76 +2298,58 @@ components:
         - bankAccountNumber
         - paymentDeadline
 
-    RentalType:
-      type: string
-      description: |
-        Rental modality offered in a package period.
-        - `CASA_ENTERA` – Entire property rented as a single unit.
-        - `POR_HABITACIONES` – Individual rooms rented separately.
-        - `AMBAS` – Both modes available simultaneously.
-      enum:
-        - CASA_ENTERA
-        - POR_HABITACIONES
-        - AMBAS
-      example: CASA_ENTERA
-
     CreateRentalPackageRequest:
       type: object
-      description: Request body to create a new rental package for an accommodation.
+      description: Request body to create a seasonal pricing package for an accommodation.
       properties:
-        type:
-          $ref: '#/components/schemas/RentalType'
         startDate:
           type: string
           format: date
-          description: First day (inclusive) the package is active. Must be today or later.
+          description: First day (inclusive) on which the seasonal price is applied. Must be today or later.
           example: '2026-07-01'
         endDate:
           type: string
           format: date
-          description: Last day (inclusive) the package is active. Must be strictly after startDate.
+          description: Last day (inclusive) on which the seasonal price is applied. Must be strictly after startDate.
           example: '2026-07-31'
-        price:
+        pricePerNight:
           type: number
           format: double
-          description: Package price that replaces the accommodation's base nightly rate for this period.
+          description: Nightly price that replaces the accommodation base rate for reservation nights inside this date range.
           minimum: 0.01
           example: 150000.00
       required:
-        - type
         - startDate
         - endDate
-        - price
+        - pricePerNight
 
     UpdateRentalPackageRequest:
       type: object
-      description: Request body to partially update a rental package. All fields are optional.
+      description: Request body to partially update a seasonal pricing package. All fields are optional.
       properties:
-        type:
-          $ref: '#/components/schemas/RentalType'
         startDate:
           type: string
           format: date
-          description: New start date. Must be today or later if provided.
+          description: New first day (inclusive) on which the seasonal price is applied. Must be today or later if provided.
           example: '2026-08-01'
           nullable: true
         endDate:
           type: string
           format: date
-          description: New end date. Must be strictly after the effective startDate.
+          description: New last day (inclusive) on which the seasonal price is applied. Must be strictly after the effective startDate.
           example: '2026-08-31'
           nullable: true
-        price:
+        pricePerNight:
           type: number
           format: double
-          description: New package price.
+          description: New nightly price that replaces the accommodation base rate for nights inside the package range.
           minimum: 0.01
           example: 160000.00
           nullable: true
 
     RentalPackageResponse:
       type: object
-      description: Response body representing a rental package.
+      description: Response body representing a seasonal pricing package.
       properties:
         id:
           type: integer
@@ -2343,22 +2361,20 @@ components:
           format: int64
           description: ID of the accommodation this package belongs to.
           example: 15
-        type:
-          $ref: '#/components/schemas/RentalType'
         startDate:
           type: string
           format: date
-          description: First day the package is active (inclusive).
+          description: First day on which the seasonal price is applied (inclusive).
           example: '2026-07-01'
         endDate:
           type: string
           format: date
-          description: Last day the package is active (inclusive).
+          description: Last day on which the seasonal price is applied (inclusive).
           example: '2026-07-31'
-        price:
+        pricePerNight:
           type: number
           format: double
-          description: Package price that replaces the accommodation nightly base rate.
+          description: Nightly price that replaces the accommodation base rate for reservation nights inside the package range.
           example: 150000.00
         createdAt:
           type: string
@@ -2371,9 +2387,8 @@ components:
       required:
         - id
         - accommodationId
-        - type
         - startDate
         - endDate
-        - price
+        - pricePerNight
         - createdAt
         - updatedAt

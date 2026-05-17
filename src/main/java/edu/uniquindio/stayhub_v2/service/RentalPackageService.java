@@ -28,9 +28,8 @@ import java.util.List;
  * <ol>
  *   <li>Only users with the {@code HOST} role may create/update/delete packages.</li>
  *   <li>The authenticated HOST must own the target accommodation.</li>
- *   <li>No two packages for the same accommodation may have overlapping date ranges,
- *       regardless of {@link edu.uniquindio.stayhub_v2.model.RentalType}.</li>
- *   <li>The package {@code price} replaces the accommodation's base {@code pricePerNight}
+ *   <li>No two packages for the same accommodation may have overlapping date ranges.</li>
+ *   <li>The package {@code pricePerNight} replaces the accommodation's base {@code pricePerNight}
  *       for the entire package period.</li>
  * </ol>
  *
@@ -129,10 +128,9 @@ public class RentalPackageService {
         }
 
         // Apply non-null fields
-        if (requestDTO.type() != null)      rentalPackage.setType(requestDTO.type());
-        if (requestDTO.startDate() != null) rentalPackage.setStartDate(requestDTO.startDate());
-        if (requestDTO.endDate() != null)   rentalPackage.setEndDate(requestDTO.endDate());
-        if (requestDTO.price() != null)     rentalPackage.setPrice(requestDTO.price());
+        if (requestDTO.startDate() != null)     rentalPackage.setStartDate(requestDTO.startDate());
+        if (requestDTO.endDate() != null)       rentalPackage.setEndDate(requestDTO.endDate());
+        if (requestDTO.pricePerNight() != null) rentalPackage.setPricePerNight(requestDTO.pricePerNight());
 
         RentalPackage saved = rentalPackageRepository.save(rentalPackage);
         log.info("Rental package {} updated for accommodation {} by host {}",

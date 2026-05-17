@@ -11,11 +11,11 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
- * Entity representing a rental package associated with an {@link Accommodation}.
+ * Entity representing a seasonal pricing rule associated with an {@link Accommodation}.
  *
- * <p>A rental package lets a host define a custom price and rental modality
- * ({@link RentalType}) for a specific date range. When a package is active for a
- * given period its {@code price} <b>replaces</b> the accommodation's base
+ * <p>A rental package lets a host define a custom nightly price for a specific
+ * date range. When a package is active for a given period its
+ * {@code pricePerNight} <b>replaces</b> the accommodation's base
  * {@code pricePerNight}.</p>
  *
  * <p><b>Overlap rule:</b> No two packages belonging to the same accommodation may
@@ -31,7 +31,6 @@ import java.time.LocalDate;
  * @version 1.0
  * @since 1.0
  * @see Accommodation
- * @see RentalType
  */
 @Entity
 @Table(
@@ -67,15 +66,6 @@ public class RentalPackage extends Auditable {
     private Accommodation accommodation;
 
     /**
-     * Rental modality offered during this package period.
-     *
-     * @see RentalType
-     */
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private RentalType type;
-
-    /**
      * First day (inclusive) the package is active.
      *
      * <p>Must be today or a future date. Must be strictly before {@link #endDate}.</p>
@@ -92,11 +82,11 @@ public class RentalPackage extends Auditable {
     private LocalDate endDate;
 
     /**
-     * Price charged during this package period.
+     * Nightly price charged during this package period.
      *
      * <p>Replaces the accommodation's base {@code pricePerNight} for any
      * reservation that falls within the package date range.</p>
      */
     @Column(nullable = false, precision = 12, scale = 2)
-    private BigDecimal price;
+    private BigDecimal pricePerNight;
 }

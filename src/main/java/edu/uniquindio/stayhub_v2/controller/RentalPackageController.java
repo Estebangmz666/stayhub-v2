@@ -51,14 +51,16 @@ public class RentalPackageController {
     @Operation(
             summary = "Create rental package",
             description = """
-                    Creates a new rental package for the specified accommodation.
+                    Creates a seasonal pricing package for the specified accommodation.
 
                     **Business rules:**
                     - Caller must have the HOST role and be the owner of the accommodation.
                     - The package date range must not overlap with any existing package for
                       the same accommodation.
-                    - The `price` replaces the accommodation's base `pricePerNight` for the
-                      entire package period.
+                    - The `pricePerNight` replaces the accommodation's base `pricePerNight`
+                      for every reservation night that falls inside the package range.
+                    - Stays that are partially inside and partially outside the package are priced
+                      with a mixed calculation night by night.
                     """
     )
     @ApiResponses({
@@ -101,7 +103,7 @@ public class RentalPackageController {
 
     @Operation(
             summary = "List rental packages",
-            description = "Returns all rental packages for the given accommodation ordered by start date. "
+            description = "Returns all seasonal pricing packages for the given accommodation ordered by start date. "
                     + "Available to any authenticated user."
     )
     @ApiResponses({
@@ -134,7 +136,7 @@ public class RentalPackageController {
     @Operation(
             summary = "Update rental package",
             description = """
-                    Partially updates a rental package. Only non-null fields are applied.
+                    Partially updates a seasonal pricing package. Only non-null fields are applied.
 
                     **Business rules:**
                     - Caller must have the HOST role and be the owner of the accommodation.
@@ -187,7 +189,7 @@ public class RentalPackageController {
     @Operation(
             summary = "Delete rental package",
             description = """
-                    Permanently deletes a rental package.
+                    Permanently deletes a seasonal pricing package.
 
                     **Business rules:**
                     - Caller must have the HOST role and be the owner of the accommodation.
