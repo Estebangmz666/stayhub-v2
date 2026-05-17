@@ -8,6 +8,8 @@ import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryProje
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.UpdateReservationRequestDTO;
+import edu.uniquindio.stayhub_v2.dto.reservation.quoting.ReservationQuoteBreakdownItem;
+import edu.uniquindio.stayhub_v2.dto.reservation.quoting.SourceType;
 import edu.uniquindio.stayhub_v2.event.ReservationCancelledEvent;
 import edu.uniquindio.stayhub_v2.event.ReservationCompletedEvent;
 import edu.uniquindio.stayhub_v2.event.ReservationCreatedEvent;
@@ -241,16 +243,12 @@ public class ReservationService {
         log.debug("Guest user: {} (ID: {})", user.getEmail(), user.getId());
 
         // 4. Calculate number of nights and total price
-        calculateNights(
-                createReservationRequestDTO.startDate(),
-                createReservationRequestDTO.endDate(),
-                accommodation.getId()
-        );
-        BigDecimal totalPrice = calculateTotalPrice(
+        ReservationPricingDetails pricingDetails = calculateReservationPricing(
                 accommodation,
                 createReservationRequestDTO.startDate(),
                 createReservationRequestDTO.endDate()
         );
+        BigDecimal totalPrice = pricingDetails.finalTotalPrice();
 
         log.debug("Calculated price: {} {} for stay {} to {}",
                 totalPrice,
@@ -259,15 +257,10 @@ public class ReservationService {
                 createReservationRequestDTO.endDate());
 
         // 5. Calculate deposit (20%) and payment deadline
-        BigDecimal depositAmount = calculateDepositAmount(totalPrice);
-        LocalDateTime paymentDeadline = LocalDateTime.now().plusDays(deadlineDays);
-        BigDecimal baseTotalPrice = calculateBaseTotalPrice(
-                accommodation,
-                createReservationRequestDTO.startDate(),
-                createReservationRequestDTO.endDate()
-        );
+        BigDecimal depositAmount = pricingDetails.depositAmount();
+        LocalDateTime paymentDeadline = pricingDetails.paymentDeadline();
         RentalPriceModificationResponseDTO rentalPriceModification =
-                buildRentalPriceModification(baseTotalPrice, totalPrice, accommodation.getCurrency());
+                pricingDetails.rentalPriceModification();
         log.debug("Deposit amount: {} | Payment deadline: {}", depositAmount, paymentDeadline);
 
         // 6. Create and populate reservation entity
@@ -406,21 +399,17 @@ public class ReservationService {
                     "Accommodation is already booked for the selected dates");
         }
 
-        calculateNights(
-                updateReservationRequestDTO.startDate(),
-                updateReservationRequestDTO.endDate(),
-                accommodationId
-        );
-        BigDecimal totalPrice = calculateTotalPrice(
+        ReservationPricingDetails pricingDetails = calculateReservationPricing(
                 reservation.getAccommodation(),
                 updateReservationRequestDTO.startDate(),
                 updateReservationRequestDTO.endDate()
         );
+        BigDecimal totalPrice = pricingDetails.finalTotalPrice();
 
         reservation.setStartDate(updateReservationRequestDTO.startDate());
         reservation.setEndDate(updateReservationRequestDTO.endDate());
         reservation.setTotalPrice(totalPrice);
-        reservation.setDepositAmount(calculateDepositAmount(totalPrice));
+        reservation.setDepositAmount(pricingDetails.depositAmount());
 
         Reservation updated = reservationRepository.save(reservation);
         log.info("Reservation {} updated successfully", updated.getId());
@@ -690,7 +679,37 @@ public class ReservationService {
         }
     }
 
-    private void calculateNights(
+    public ReservationPricingDetails calculateReservationPricing(
+            @NonNull Accommodation accommodation,
+            @NonNull LocalDateTime startDate,
+            @NonNull LocalDateTime endDate) {
+
+        long nights = calculateNights(startDate, endDate, accommodation.getId());
+        List<ReservationQuoteBreakdownItem> breakdown = buildPriceBreakdown(accommodation, startDate, endDate);
+        BigDecimal finalTotalPrice = breakdown.stream()
+                .map(ReservationQuoteBreakdownItem::nightPrice)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal baseTotalPrice = calculateBaseTotalPrice(accommodation, startDate, endDate);
+        BigDecimal depositAmount = calculateDepositAmount(finalTotalPrice);
+        LocalDateTime paymentDeadline = LocalDateTime.now().plusDays(deadlineDays);
+        RentalPriceModificationResponseDTO rentalPriceModification = buildRentalPriceModification(
+                baseTotalPrice,
+                finalTotalPrice,
+                accommodation.getCurrency()
+        );
+
+        return new ReservationPricingDetails(
+                nights,
+                baseTotalPrice,
+                finalTotalPrice,
+                depositAmount,
+                paymentDeadline,
+                rentalPriceModification,
+                breakdown
+        );
+    }
+
+    private long calculateNights(
             @NonNull LocalDateTime startDate,
             @NonNull LocalDateTime endDate,
             Long accommodationId) {
@@ -706,9 +725,10 @@ public class ReservationService {
             throw new IllegalArgumentException("Reservation must be at least one night");
         }
 
+        return nights;
     }
 
-    private BigDecimal calculateTotalPrice(
+    private List<ReservationQuoteBreakdownItem> buildPriceBreakdown(
             @NonNull Accommodation accommodation,
             @NonNull LocalDateTime startDate,
             @NonNull LocalDateTime endDate) {
@@ -722,11 +742,11 @@ public class ReservationService {
                 stayEndDateInclusive
         );
 
-        BigDecimal totalPrice = BigDecimal.ZERO;
+        List<ReservationQuoteBreakdownItem> breakdown = new java.util.ArrayList<>();
         LocalDate currentNight = stayStartDate;
 
         while (currentNight.isBefore(endDate.toLocalDate())) {
-            totalPrice = totalPrice.add(resolveNightlyPrice(
+            breakdown.add(resolveNightlyPrice(
                     accommodation,
                     overlappingPackages,
                     currentNight
@@ -734,10 +754,10 @@ public class ReservationService {
             currentNight = currentNight.plusDays(1);
         }
 
-        return totalPrice;
+        return breakdown;
     }
 
-    private BigDecimal resolveNightlyPrice(
+    private ReservationQuoteBreakdownItem resolveNightlyPrice(
             @NonNull Accommodation accommodation,
             @NonNull List<RentalPackage> overlappingPackages,
             LocalDate nightDate) {
@@ -746,8 +766,16 @@ public class ReservationService {
                 .filter(rentalPackage -> !nightDate.isBefore(rentalPackage.getStartDate())
                         && !nightDate.isAfter(rentalPackage.getEndDate()))
                 .findFirst()
-                .map(RentalPackage::getPricePerNight)
-                .orElse(accommodation.getPricePerNight());
+                .map(rentalPackage -> new ReservationQuoteBreakdownItem(
+                        nightDate,
+                        rentalPackage.getPricePerNight(),
+                        SourceType.SEASONAL
+                ))
+                .orElseGet(() -> new ReservationQuoteBreakdownItem(
+                        nightDate,
+                        accommodation.getPricePerNight(),
+                        SourceType.BASE
+                ));
     }
 
     private @NonNull BigDecimal calculateDepositAmount(@NonNull BigDecimal totalPrice) {

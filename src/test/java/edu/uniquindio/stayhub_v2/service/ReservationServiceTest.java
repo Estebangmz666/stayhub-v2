@@ -7,6 +7,7 @@ import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryProje
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.UpdateReservationRequestDTO;
+import edu.uniquindio.stayhub_v2.dto.reservation.quoting.SourceType;
 import edu.uniquindio.stayhub_v2.event.ReservationCancelledEvent;
 import edu.uniquindio.stayhub_v2.event.ReservationCompletedEvent;
 import edu.uniquindio.stayhub_v2.event.ReservationCreatedEvent;
@@ -815,5 +816,36 @@ class ReservationServiceTest {
         assertThat(completedCount).isEqualTo(1);
         assertThat(completedCandidate.getStatus()).isEqualTo(ReservationStatus.COMPLETED);
         verify(applicationEventPublisher).publishEvent(any(ReservationCompletedEvent.class));
+    }
+
+    @Test
+    void calculateReservationPricing_MixedPackageAndBasePricing_BuildsNightlyBreakdown() {
+        LocalDateTime start = LocalDateTime.now().plusDays(10);
+        LocalDateTime end = start.plusDays(4);
+
+        RentalPackage rentalPackage = RentalPackage.builder()
+                .id(1L)
+                .accommodation(accommodation)
+                .startDate(start.toLocalDate().plusDays(1))
+                .endDate(start.toLocalDate().plusDays(2))
+                .pricePerNight(new BigDecimal("300000"))
+                .build();
+
+        when(rentalPackageRepository.findOverlappingPackagesForStay(
+                eq(accommodation.getId()),
+                eq(start.toLocalDate()),
+                eq(end.toLocalDate().minusDays(1))
+        )).thenReturn(List.of(rentalPackage));
+
+        ReservationPricingDetails pricingDetails =
+                reservationService.calculateReservationPricing(accommodation, start, end);
+
+        assertThat(pricingDetails.nights()).isEqualTo(4);
+        assertThat(pricingDetails.finalTotalPrice()).isEqualByComparingTo("1000000");
+        assertThat(pricingDetails.breakdown()).hasSize(4);
+        assertThat(pricingDetails.breakdown().get(0).source()).isEqualTo(SourceType.BASE);
+        assertThat(pricingDetails.breakdown().get(1).source()).isEqualTo(SourceType.SEASONAL);
+        assertThat(pricingDetails.breakdown().get(2).source()).isEqualTo(SourceType.SEASONAL);
+        assertThat(pricingDetails.breakdown().get(3).source()).isEqualTo(SourceType.BASE);
     }
 }

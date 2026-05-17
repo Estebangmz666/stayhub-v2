@@ -6,6 +6,9 @@ import edu.uniquindio.stayhub_v2.dto.reservation.CreateReservationResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.reservation.UpdateReservationRequestDTO;
+import edu.uniquindio.stayhub_v2.dto.reservation.quoting.ReservationQuoteRequestDTO;
+import edu.uniquindio.stayhub_v2.dto.reservation.quoting.ReservationQuoteResponseDTO;
+import edu.uniquindio.stayhub_v2.service.QuotingService;
 import edu.uniquindio.stayhub_v2.service.ReservationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -32,7 +35,7 @@ import org.springframework.web.bind.annotation.*;
 public class BookingController {
 
     private final ReservationService reservationService;
-
+    private final QuotingService quotingService;
 
     @Operation(
             summary = "Create a new accommodation reservation",
@@ -285,6 +288,109 @@ public class BookingController {
         log.info("PATCH /bookings/{}/deposit-paid - marking deposit as paid", reservationId);
         RetrieveReservationResponseDTO response = reservationService.markDepositAsPaid(reservationId);
         log.info("Deposit marked as paid for reservation with id: {}", response.id());
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(
+            summary = "Generate a reservation quote",
+            description = """
+                    Calculates a reservation quote for a full-accommodation stay without creating the reservation.
+
+                    The quote uses the same pricing engine as reservation creation:
+                    - the accommodation base `pricePerNight` applies by default;
+                    - if a night falls inside a seasonal pricing package, that night uses the package price;
+                    - if the stay mixes regular and seasonal dates, the total is calculated night by night.
+
+                    The response includes:
+                    - `baseTotalPrice` using only the accommodation base price,
+                    - `finalTotalPrice` using seasonal pricing when applicable,
+                    - `depositAmount`,
+                    - a `priceModification` summary,
+                    - and a `breakdown` list that explains the nightly source of each charged amount.
+
+                    This endpoint does not create or lock a reservation. It only returns a quote for the requested dates.
+                    """
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Reservation quote generated successfully",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ReservationQuoteResponseDTO.class),
+                            examples = @ExampleObject(
+                                    name = "Reservation quote generated successfully",
+                                    value = """
+                        {
+                          "accommodationId": 15,
+                          "startDate": "2026-06-01T14:00:00",
+                          "endDate": "2026-06-05T11:00:00",
+                          "nights": 4,
+                          "baseTotalPrice": 720000.00,
+                          "finalTotalPrice": 840000.00,
+                          "currency": "COP",
+                          "depositAmount": 168000.00,
+                          "paymentDeadline": "2026-05-20",
+                          "priceModification": {
+                            "type": "INCREASED",
+                            "amount": 120000.00,
+                            "message": "El precio de esta reserva aumentó $120.000 COP por tarifa de temporada."
+                          },
+                          "breakdown": [
+                            {
+                              "date": "2026-06-01",
+                              "nightPrice": 180000.00,
+                              "source": "BASE"
+                            },
+                            {
+                              "date": "2026-06-02",
+                              "nightPrice": 240000.00,
+                              "source": "SEASONAL"
+                            },
+                            {
+                              "date": "2026-06-03",
+                              "nightPrice": 240000.00,
+                              "source": "SEASONAL"
+                            },
+                            {
+                              "date": "2026-06-04",
+                              "nightPrice": 180000.00,
+                              "source": "BASE"
+                            }
+                          ]
+                        }
+                        """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "Invalid request or reservation policy violation",
+                    content = @Content(schema = @Schema(implementation = Error.class))
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "User not authenticated",
+                    content = @Content(schema = @Schema(implementation = Error.class))
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Accommodation not found or unavailable",
+                    content = @Content(schema = @Schema(implementation = Error.class))
+            ),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "Accommodation already booked for the selected dates",
+                    content = @Content(schema = @Schema(implementation = Error.class))
+            )
+    })
+    @PostMapping("/quote")
+    public ResponseEntity<ReservationQuoteResponseDTO> quoteReservation(
+            @Valid @RequestBody ReservationQuoteRequestDTO reservationQuoteRequestDTO
+    ) {
+        log.info("Processing reservation quote request");
+        ReservationQuoteResponseDTO response = quotingService.quoteReservation(reservationQuoteRequestDTO);
+        log.info("Reservation quote response: {}", response);
         return ResponseEntity.ok(response);
     }
 }

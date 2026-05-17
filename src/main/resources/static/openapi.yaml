@@ -720,6 +720,63 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /api/v2/bookings/quote:
+    post:
+      tags:
+        - Bookings
+      summary: Generate a reservation quote
+      description: |
+        Calculates a reservation quote for a full accommodation stay without creating the reservation.
+
+        Pricing notes:
+        - the accommodation base `pricePerNight` applies by default,
+        - if a night falls inside a seasonal pricing package, that night uses the package nightly price,
+        - if the stay mixes regular and seasonal dates, the total is calculated night by night,
+        - the response includes `baseTotalPrice`, `finalTotalPrice`, `depositAmount`, `priceModification`,
+          and a nightly `breakdown` explaining the source of each charged amount.
+
+        This endpoint does not create, confirm, or lock a reservation.
+      operationId: quoteReservation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservationQuoteRequest'
+      responses:
+        '200':
+          description: Reservation quote generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationQuoteResponse'
+        '400':
+          description: Invalid request or reservation policy violation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: User not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Accommodation not found or unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Accommodation already booked for the selected dates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/v2/bookings/{reservationId}:
     get:
       tags:
@@ -1280,6 +1337,113 @@ components:
         - ACTIVE
         - CANCELLED
         - COMPLETED
+
+    ReservationQuoteSourceType:
+      type: string
+      description: Indicates whether the nightly quote price came from the accommodation base price or a seasonal package.
+      enum:
+        - BASE
+        - SEASONAL
+
+    ReservationQuoteBreakdownItem:
+      type: object
+      description: One nightly pricing entry used to explain how the reservation quote total was built.
+      properties:
+        date:
+          type: string
+          format: date
+          example: '2026-06-02'
+        nightPrice:
+          type: number
+          format: double
+          example: 240000.00
+        source:
+          $ref: '#/components/schemas/ReservationQuoteSourceType'
+      required:
+        - date
+        - nightPrice
+        - source
+
+    ReservationQuoteRequest:
+      type: object
+      description: Request body used to calculate a reservation quote without creating the reservation.
+      properties:
+        accommodationId:
+          type: integer
+          format: int64
+          minimum: 1
+          example: 15
+        startDate:
+          type: string
+          format: date-time
+          example: '2026-06-01T14:00:00'
+        endDate:
+          type: string
+          format: date-time
+          example: '2026-06-05T11:00:00'
+      required:
+        - accommodationId
+        - startDate
+        - endDate
+
+    ReservationQuoteResponse:
+      type: object
+      description: Full reservation quote returned by the pricing engine without creating the reservation.
+      properties:
+        accommodationId:
+          type: integer
+          format: int64
+          example: 15
+        startDate:
+          type: string
+          format: date-time
+          example: '2026-06-01T14:00:00'
+        endDate:
+          type: string
+          format: date-time
+          example: '2026-06-05T11:00:00'
+        nights:
+          type: integer
+          minimum: 1
+          example: 4
+        baseTotalPrice:
+          type: number
+          format: double
+          example: 720000.00
+        finalTotalPrice:
+          type: number
+          format: double
+          example: 840000.00
+        currency:
+          type: string
+          example: COP
+        depositAmount:
+          type: number
+          format: double
+          example: 168000.00
+        paymentDeadline:
+          type: string
+          format: date
+          example: '2026-05-20'
+        priceModification:
+          $ref: '#/components/schemas/RentalPriceModificationResponse'
+        breakdown:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ReservationQuoteBreakdownItem'
+      required:
+        - accommodationId
+        - startDate
+        - endDate
+        - nights
+        - baseTotalPrice
+        - finalTotalPrice
+        - currency
+        - depositAmount
+        - paymentDeadline
+        - priceModification
+        - breakdown
 
     UserSignupRequest:
       type: object
