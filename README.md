@@ -38,7 +38,7 @@ The repository is actively evolving and the current implementation already inclu
 
 The frontend is maintained in a separate repository, but it acts as the main application entry point for this backend:
 
-- Host dashboard: [https://stay-hub-xi.vercel.app/dashboard/host/properties](https://stay-hub-xi.vercel.app/dashboard/host/properties)
+- Host dashboard: [https://stay-hub-xi.vercel.app/login](https://stay-hub-xi.vercel.app/login)
 
 This repository focuses on the backend API, scheduled jobs, business rules, and email workflows that power that experience.
 
