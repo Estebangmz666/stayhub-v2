@@ -1,27 +1,13 @@
 package edu.uniquindio.stayhub_v2.service;
 
-import edu.uniquindio.stayhub_v2.dto.reservation.CreateReservationRequestDTO;
-import edu.uniquindio.stayhub_v2.dto.reservation.CreateReservationResponseDTO;
-import edu.uniquindio.stayhub_v2.dto.reservation.RentalPriceModificationType;
-import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryProjectionDTO;
-import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationResponseDTO;
-import edu.uniquindio.stayhub_v2.dto.reservation.RetrieveReservationSummaryResponseDTO;
-import edu.uniquindio.stayhub_v2.dto.reservation.UpdateReservationRequestDTO;
+import edu.uniquindio.stayhub_v2.dto.reservation.*;
 import edu.uniquindio.stayhub_v2.dto.reservation.quoting.SourceType;
 import edu.uniquindio.stayhub_v2.event.ReservationCancelledEvent;
 import edu.uniquindio.stayhub_v2.event.ReservationCompletedEvent;
 import edu.uniquindio.stayhub_v2.event.ReservationCreatedEvent;
-import edu.uniquindio.stayhub_v2.exception.AccommodationNotFoundException;
-import edu.uniquindio.stayhub_v2.exception.DepositNotPaidException;
-import edu.uniquindio.stayhub_v2.exception.ReservationNotFoundException;
-import edu.uniquindio.stayhub_v2.exception.ReservationPolicyViolationException;
+import edu.uniquindio.stayhub_v2.exception.*;
 import edu.uniquindio.stayhub_v2.mapper.ReservationMapper;
-import edu.uniquindio.stayhub_v2.model.Accommodation;
-import edu.uniquindio.stayhub_v2.model.RentalPackage;
-import edu.uniquindio.stayhub_v2.model.Role;
-import edu.uniquindio.stayhub_v2.model.Reservation;
-import edu.uniquindio.stayhub_v2.model.ReservationStatus;
-import edu.uniquindio.stayhub_v2.model.User;
+import edu.uniquindio.stayhub_v2.model.*;
 import edu.uniquindio.stayhub_v2.repository.AccommodationRepository;
 import edu.uniquindio.stayhub_v2.repository.RentalPackageRepository;
 import edu.uniquindio.stayhub_v2.repository.ReservationRepository;
@@ -36,7 +22,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
@@ -51,11 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class ReservationServiceTest {
@@ -247,7 +228,7 @@ class ReservationServiceTest {
         assertThat(response.rentalPriceModification().type()).isEqualTo(RentalPriceModificationType.UNCHANGED);
         assertThat(response.rentalPriceModification().amount()).isEqualByComparingTo("0.00");
         assertThat(response.rentalPriceModification().message())
-                .contains("no tuvo cambios de precio por temporada");
+                .contains("did not have seasonal price changes");
     }
 
     @Test
@@ -343,7 +324,7 @@ class ReservationServiceTest {
 
         assertThat(response.rentalPriceModification().type()).isEqualTo(RentalPriceModificationType.INCREASED);
         assertThat(response.rentalPriceModification().amount()).isEqualByComparingTo("300000");
-        assertThat(response.rentalPriceModification().message()).contains("aumentó");
+        assertThat(response.rentalPriceModification().message()).contains("increased");
     }
 
     @Test
@@ -375,7 +356,7 @@ class ReservationServiceTest {
 
         assertThat(response.rentalPriceModification().type()).isEqualTo(RentalPriceModificationType.SAVED);
         assertThat(response.rentalPriceModification().amount()).isEqualByComparingTo("100000");
-        assertThat(response.rentalPriceModification().message()).contains("Has ahorrado");
+        assertThat(response.rentalPriceModification().message()).contains("You saved");
     }
 
     @Test
@@ -765,16 +746,14 @@ class ReservationServiceTest {
     }
 
     @Test
-    void markDepositAsPaid_HostUser_ThrowsAccessDeniedException() {
+    void markDepositAsPaid_HostUser_ThrowsUnauthorizedRoleException() {
         savedReservation.setDepositPaid(false);
 
         when(userService.getCurrentUser()).thenReturn(host);
-        when(reservationRepository.findAuthorizedById(100L, host.getId()))
-                .thenReturn(Optional.of(savedReservation));
 
         assertThatThrownBy(() -> reservationService.markDepositAsPaid(100L))
-                .isInstanceOf(AccessDeniedException.class)
-                .hasMessageContaining("Only the guest");
+                .isInstanceOf(UnauthorizedRoleException.class)
+                .hasMessageContaining("GUEST role");
 
         verify(reservationRepository, never()).markDepositAsPaidForGuest(any(), any(), any());
     }

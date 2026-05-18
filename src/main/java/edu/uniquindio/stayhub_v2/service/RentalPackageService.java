@@ -9,7 +9,6 @@ import edu.uniquindio.stayhub_v2.exception.UnauthorizedHostException;
 import edu.uniquindio.stayhub_v2.mapper.RentalPackageMapper;
 import edu.uniquindio.stayhub_v2.model.Accommodation;
 import edu.uniquindio.stayhub_v2.model.RentalPackage;
-import edu.uniquindio.stayhub_v2.model.Role;
 import edu.uniquindio.stayhub_v2.model.User;
 import edu.uniquindio.stayhub_v2.repository.AccommodationRepository;
 import edu.uniquindio.stayhub_v2.repository.RentalPackageRepository;
@@ -49,6 +48,7 @@ public class RentalPackageService {
     private final AccommodationRepository accommodationRepository;
     private final RentalPackageMapper rentalPackageMapper;
     private final UserService userService;
+    private final AuthorizationService authorizationService;
 
     // -------------------------------------------------------------------------
     // Public API
@@ -68,7 +68,7 @@ public class RentalPackageService {
     public RentalPackageResponseDTO createPackage(Long accommodationId,
                                                   CreateRentalPackageRequestDTO requestDTO) {
         User currentUser = userService.getCurrentUser();
-        validateHostRole(currentUser);
+        authorizationService.requireHostRole(currentUser);
 
         Accommodation accommodation = findActiveAccommodation(accommodationId);
         validateOwnership(currentUser, accommodation);
@@ -106,7 +106,7 @@ public class RentalPackageService {
                                                   Long packageId,
                                                   UpdateRentalPackageRequestDTO requestDTO) {
         User currentUser = userService.getCurrentUser();
-        validateHostRole(currentUser);
+        authorizationService.requireHostRole(currentUser);
 
         Accommodation accommodation = findActiveAccommodation(accommodationId);
         validateOwnership(currentUser, accommodation);
@@ -151,7 +151,7 @@ public class RentalPackageService {
     @Transactional
     public void deletePackage(Long accommodationId, Long packageId) {
         User currentUser = userService.getCurrentUser();
-        validateHostRole(currentUser);
+        authorizationService.requireHostRole(currentUser);
 
         Accommodation accommodation = findActiveAccommodation(accommodationId);
         validateOwnership(currentUser, accommodation);
@@ -186,13 +186,6 @@ public class RentalPackageService {
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
-
-    private void validateHostRole(User user) {
-        if (user.getRoles() == null || !user.getRoles().contains(Role.HOST)) {
-            throw new UnauthorizedHostException(
-                    "Only users with the HOST role can manage rental packages.");
-        }
-    }
 
     private void validateOwnership(User user, Accommodation accommodation) {
         if (!accommodation.getHost().getId().equals(user.getId())) {

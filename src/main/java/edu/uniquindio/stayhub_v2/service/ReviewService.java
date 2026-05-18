@@ -44,6 +44,7 @@ public class ReviewService {
     private final AccommodationRepository accommodationRepository;
     private final ReviewMapper reviewMapper;
     private final UserService userService;
+    private final AuthorizationService authorizationService;
 
     @Transactional
     public ReviewResponseDTO createReview(
@@ -58,6 +59,9 @@ public class ReviewService {
                 .orElseThrow(() -> new AccommodationNotFoundException("Accommodation not found"));
 
         User currentUser = userService.getCurrentUser();
+
+        authorizationService.requireGuestRole(currentUser);
+
         Reservation reservation = reservationRepository.findById(createReviewRequestDTO.reservationId())
                 .orElseThrow(() -> new ReservationNotFoundException(
                         "Reservation with ID " + createReviewRequestDTO.reservationId() + " not found"
@@ -106,6 +110,9 @@ public class ReviewService {
         log.info("Responding to review {}", reviewId);
 
         User currentUser = userService.getCurrentUser();
+
+        authorizationService.requireHostRole(currentUser);
+
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ReviewNotFoundException(
                         "Review with ID " + reviewId + " not found"

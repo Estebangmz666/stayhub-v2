@@ -42,7 +42,7 @@ public record UserSignupRequestDTO(
         @Schema(description = "The user's password", example = "P@ssw0rd123")
         String password,
 
-        @NotNull(message = "Role is required")
+        @NotNull(message = "Minimum one role is required")
         @Schema(description = "The role or roles assigned to the user", example = "[\"GUEST\"]", allowableValues = {"GUEST", "HOST"})
         Set<Role> roles,
 

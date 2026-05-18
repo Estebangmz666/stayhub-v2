@@ -6,6 +6,7 @@ import edu.uniquindio.stayhub_v2.dto.rental.UpdateRentalPackageRequestDTO;
 import edu.uniquindio.stayhub_v2.exception.AccommodationNotFoundException;
 import edu.uniquindio.stayhub_v2.exception.RentalPackageNotFoundException;
 import edu.uniquindio.stayhub_v2.exception.UnauthorizedHostException;
+import edu.uniquindio.stayhub_v2.exception.UnauthorizedRoleException;
 import edu.uniquindio.stayhub_v2.mapper.RentalPackageMapper;
 import edu.uniquindio.stayhub_v2.model.Accommodation;
 import edu.uniquindio.stayhub_v2.model.RentalPackage;
@@ -130,7 +131,7 @@ class RentalPackageServiceTest {
                 when(userService.getCurrentUser()).thenReturn(guestUser);
 
                 assertThatThrownBy(() -> rentalPackageService.createPackage(10L, createRequest))
-                                .isInstanceOf(UnauthorizedHostException.class)
+                                .isInstanceOf(UnauthorizedRoleException.class)
                                 .hasMessageContaining("HOST role");
 
                 verify(rentalPackageRepository, never()).save(any());
@@ -321,7 +322,7 @@ class RentalPackageServiceTest {
                 when(userService.getCurrentUser()).thenReturn(guestUser);
 
                 assertThatThrownBy(() -> rentalPackageService.deletePackage(10L, 100L))
-                                .isInstanceOf(UnauthorizedHostException.class)
+                                .isInstanceOf(UnauthorizedRoleException.class)
                                 .hasMessageContaining("HOST role");
         }
 

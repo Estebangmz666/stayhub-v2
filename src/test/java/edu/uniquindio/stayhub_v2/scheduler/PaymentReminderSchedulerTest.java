@@ -33,7 +33,7 @@ import static org.mockito.Mockito.*;
  * payment deadlines and triggers reminder emails for each.</p>
  */
 @ExtendWith(MockitoExtension.class)
-class PaymentReminderSchedulerTest {
+class ReservationLifeCycleSchedulerTest {
 
     @Mock
     private ReservationRepository reservationRepository;

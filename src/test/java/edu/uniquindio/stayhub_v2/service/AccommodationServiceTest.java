@@ -1,16 +1,16 @@
 package edu.uniquindio.stayhub_v2.service;
 
-import edu.uniquindio.stayhub_v2.exception.AccommodationNotFoundException;
-import edu.uniquindio.stayhub_v2.exception.ActiveReservationsException;
-import edu.uniquindio.stayhub_v2.exception.UnauthorizedHostException;
 import edu.uniquindio.stayhub_v2.dto.accommodation.AccommodationGetByIdResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.accommodation.CreateAccommodationRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.accommodation.CreateAccommodationResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.accommodation.UnavailableAccommodationDateRangeResponseDTO;
+import edu.uniquindio.stayhub_v2.exception.AccommodationNotFoundException;
+import edu.uniquindio.stayhub_v2.exception.ActiveReservationsException;
+import edu.uniquindio.stayhub_v2.exception.UnauthorizedRoleException;
 import edu.uniquindio.stayhub_v2.mapper.AccommodationMapper;
 import edu.uniquindio.stayhub_v2.model.Accommodation;
-import edu.uniquindio.stayhub_v2.model.Role;
 import edu.uniquindio.stayhub_v2.model.ReservationStatus;
+import edu.uniquindio.stayhub_v2.model.Role;
 import edu.uniquindio.stayhub_v2.model.User;
 import edu.uniquindio.stayhub_v2.repository.AccommodationRepository;
 import edu.uniquindio.stayhub_v2.repository.ReservationRepository;
@@ -33,12 +33,8 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 public class AccommodationServiceTest {
@@ -55,7 +51,7 @@ public class AccommodationServiceTest {
         @Mock
         private UserService userService;
 
-        @InjectMocks
+    @InjectMocks
         private AccommodationService accommodationService;
 
         private Accommodation testAccommodation;
@@ -187,7 +183,7 @@ public class AccommodationServiceTest {
                 when(userService.getCurrentUser()).thenReturn(guestUser);
 
                 assertThatThrownBy(() -> accommodationService.createAccommodation(requestDTO))
-                                .isInstanceOf(UnauthorizedHostException.class)
+                                .isInstanceOf(UnauthorizedRoleException.class)
                                 .hasMessageContaining("HOST role");
 
                 verify(accommodationMapper, never()).toEntity(any());
@@ -234,8 +230,8 @@ public class AccommodationServiceTest {
                         .thenReturn(Optional.of(testAccommodation));
 
                 assertThatThrownBy(() -> accommodationService.deactivateAccommodation(100L))
-                        .isInstanceOf(UnauthorizedHostException.class)
-                        .hasMessageContaining("You do not have permissions to deactivate this rural house.");
+                        .isInstanceOf(UnauthorizedRoleException.class)
+                        .hasMessageContaining("HOST role");
 
                 assertThat(testAccommodation.isDeleted()).isFalse();
 

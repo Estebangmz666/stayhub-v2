@@ -126,6 +126,7 @@ public class ReservationService {
     private final UserService userService;
     private final ReservationMapper reservationMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final AuthorizationService authorizationService;
 
     @Value("${stayhub.payment.bank-account}")
     private String bankAccountNumber;
@@ -191,7 +192,7 @@ public class ReservationService {
      * </ul>
      *
      * @param createReservationRequestDTO request payload containing accommodation ID,
-     *                                    check-in and check-out datetimes
+     *                                    check-in and check-out datetime
      * @return {@link CreateReservationResponseDTO} with reservation data, deposit
      *         instructions, and seasonal pricing modification details
      * @throws AccommodationNotFoundException if the accommodation does not exist,
@@ -240,6 +241,7 @@ public class ReservationService {
 
         // 3. Get a current authenticated user (guest)
         User user = userService.getCurrentUser();
+        authorizationService.requireGuestRole(user);
         log.debug("Guest user: {} (ID: {})", user.getEmail(), user.getId());
 
         // 4. Calculate number of nights and total price
@@ -376,6 +378,7 @@ public class ReservationService {
                 updateReservationRequestDTO.endDate());
 
         User currentUser = userService.getCurrentUser();
+        authorizationService.requireGuestRole(currentUser);
         Reservation reservation = getReservationForGuestManagement(reservationId, currentUser);
 
         validateReservationIsActive(reservation);
@@ -423,6 +426,7 @@ public class ReservationService {
         log.info("Cancelling reservation {}", reservationId);
 
         User currentUser = userService.getCurrentUser();
+        authorizationService.requireGuestRole(currentUser);
         Reservation reservation = getReservationForGuestManagement(reservationId, currentUser);
 
         validateReservationIsActive(reservation);
@@ -443,6 +447,7 @@ public class ReservationService {
         log.info("Marking deposit as paid for reservation {}", reservationId);
 
         User currentUser = userService.getCurrentUser();
+        authorizationService.requireGuestRole(currentUser);
         Reservation reservation = getReservationForGuestManagement(reservationId, currentUser);
 
         validateReservationIsActive(reservation);
@@ -558,6 +563,7 @@ public class ReservationService {
 
         // 1. Get the authenticated user from the security context
         User currentUser = userService.getCurrentUser();
+
         log.debug("Authenticated user: {} (ID: {})", currentUser.getEmail(), currentUser.getId());
 
         // 2. Build pageable with fixed page size of 10, ordered by startDate descending
@@ -569,7 +575,7 @@ public class ReservationService {
 
         if (normalizedScope.isBlank()) {
             // Backward compatibility: host-first behavior
-            boolean isHost = currentUser.getRoles().contains(Role.HOST);
+            boolean isHost = authorizationService.hasRole(currentUser, Role.HOST);
             if (isHost) {
                 log.debug("No scope provided; applying legacy host-first behavior for user {}",
                         currentUser.getEmail());
@@ -680,9 +686,9 @@ public class ReservationService {
     }
 
     public ReservationPricingDetails calculateReservationPricing(
-            @NonNull Accommodation accommodation,
-            @NonNull LocalDateTime startDate,
-            @NonNull LocalDateTime endDate) {
+            Accommodation accommodation,
+            LocalDateTime startDate,
+            LocalDateTime endDate) {
 
         long nights = calculateNights(startDate, endDate, accommodation.getId());
         List<ReservationQuoteBreakdownItem> breakdown = buildPriceBreakdown(accommodation, startDate, endDate);
@@ -710,8 +716,8 @@ public class ReservationService {
     }
 
     private long calculateNights(
-            @NonNull LocalDateTime startDate,
-            @NonNull LocalDateTime endDate,
+            LocalDateTime startDate,
+            LocalDateTime endDate,
             Long accommodationId) {
 
         long nights = ChronoUnit.DAYS.between(
@@ -729,9 +735,9 @@ public class ReservationService {
     }
 
     private List<ReservationQuoteBreakdownItem> buildPriceBreakdown(
-            @NonNull Accommodation accommodation,
-            @NonNull LocalDateTime startDate,
-            @NonNull LocalDateTime endDate) {
+            Accommodation accommodation,
+            LocalDateTime startDate,
+            LocalDateTime endDate) {
 
         LocalDate stayStartDate = startDate.toLocalDate();
         LocalDate stayEndDateInclusive = endDate.toLocalDate().minusDays(1);
@@ -758,8 +764,8 @@ public class ReservationService {
     }
 
     private ReservationQuoteBreakdownItem resolveNightlyPrice(
-            @NonNull Accommodation accommodation,
-            @NonNull List<RentalPackage> overlappingPackages,
+            Accommodation accommodation,
+            List<RentalPackage> overlappingPackages,
             LocalDate nightDate) {
 
         return overlappingPackages.stream()
@@ -778,16 +784,16 @@ public class ReservationService {
                 ));
     }
 
-    private @NonNull BigDecimal calculateDepositAmount(@NonNull BigDecimal totalPrice) {
+    private BigDecimal calculateDepositAmount(@NonNull BigDecimal totalPrice) {
         return totalPrice
                 .multiply(BigDecimal.valueOf(depositPercentage))
                 .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
     }
 
-    private @NonNull BigDecimal calculateBaseTotalPrice(
-            @NonNull Accommodation accommodation,
-            @NonNull LocalDateTime startDate,
-            @NonNull LocalDateTime endDate) {
+    private BigDecimal calculateBaseTotalPrice(
+            Accommodation accommodation,
+            LocalDateTime startDate,
+            LocalDateTime endDate) {
 
         long nights = ChronoUnit.DAYS.between(startDate.toLocalDate(), endDate.toLocalDate());
         return accommodation.getPricePerNight().multiply(BigDecimal.valueOf(nights));
@@ -805,7 +811,7 @@ public class ReservationService {
             return new RentalPriceModificationResponseDTO(
                     RentalPriceModificationType.SAVED,
                     difference,
-                    "Has ahorrado " + formatAmountForMessage(difference, currency) + " en esta reserva."
+                    "You saved " + formatAmountForMessage(difference, currency) + " on this reservation."
             );
         }
 
@@ -813,15 +819,15 @@ public class ReservationService {
             return new RentalPriceModificationResponseDTO(
                     RentalPriceModificationType.INCREASED,
                     difference,
-                    "El precio de esta reserva aumentó " + formatAmountForMessage(difference, currency)
-                            + " por tarifa de temporada."
+                    "The price of this reservation increased " + formatAmountForMessage(difference, currency)
+                            + " by seasonal rate."
             );
         }
 
         return new RentalPriceModificationResponseDTO(
                 RentalPriceModificationType.UNCHANGED,
                 BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP),
-                "Esta reserva no tuvo cambios de precio por temporada."
+                "This reservation did not have seasonal price changes."
         );
     }
 

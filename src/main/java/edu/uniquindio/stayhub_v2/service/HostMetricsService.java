@@ -2,8 +2,6 @@ package edu.uniquindio.stayhub_v2.service;
 
 import edu.uniquindio.stayhub_v2.dto.host.HostAccommodationMetricsProjection;
 import edu.uniquindio.stayhub_v2.dto.host.HostAccommodationMetricsResponseDTO;
-import edu.uniquindio.stayhub_v2.exception.UnauthorizedHostException;
-import edu.uniquindio.stayhub_v2.model.Role;
 import edu.uniquindio.stayhub_v2.model.User;
 import edu.uniquindio.stayhub_v2.repository.AccommodationRepository;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +31,7 @@ public class HostMetricsService {
 
     private final AccommodationRepository accommodationRepository;
     private final UserService userService;
+    private final AuthorizationService authorizationService;
 
     @Transactional(readOnly = true)
     public Page<HostAccommodationMetricsResponseDTO> getAccommodationMetricsByPeriod(
@@ -45,7 +44,7 @@ public class HostMetricsService {
         validatePageRequest(page, size);
 
         User currentUser = userService.getCurrentUser();
-        validateHostRole(currentUser);
+        authorizationService.requireHostRole(currentUser);
 
         LocalDateTime periodStart = startDate.atStartOfDay();
         LocalDateTime periodEndExclusive = endDate.plusDays(1).atStartOfDay();
@@ -61,13 +60,6 @@ public class HostMetricsService {
                         pageable
                 )
                 .map(this::toResponseDTO);
-    }
-
-    private void validateHostRole(User currentUser) {
-        if (currentUser.getRoles() == null || !currentUser.getRoles().contains(Role.HOST)) {
-            throw new UnauthorizedHostException(
-                    "Only users with the HOST role can access accommodation metrics.");
-        }
     }
 
     private void validateRequestedPeriod(LocalDate startDate, LocalDate endDate) {

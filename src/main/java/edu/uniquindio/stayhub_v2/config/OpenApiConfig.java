@@ -88,12 +88,11 @@ import org.springframework.context.annotation.Configuration;
                 @Server(
                         url = "http://localhost:8080",
                         description = "Local development server"
+                ),
+                @Server(
+                        url = "https://stayhub-v2.onrender.com",
+                        description = "Production server"
                 )
-                // Additional servers can be added here for different environments
-                // @Server(
-                //         url = "https://api.stayhub.com",
-                //         description = "Production server"
-                // )
         }
 )
 public class OpenApiConfig {

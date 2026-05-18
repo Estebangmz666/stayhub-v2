@@ -96,7 +96,8 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(UnauthorizedHostException.class)
     public ResponseEntity<Error> handleUnauthorizedHostException(UnauthorizedHostException e) {
-        log.warn("Unauthorized host action: {}", e.getMessage());
+        log.warn("Unauthorized host action");
+        log.debug("Unauthorized host action details: {}", e.getMessage());
         return new ResponseEntity<>(
                 new Error(e.getMessage(), HttpStatus.FORBIDDEN.value()),
                 HttpStatus.FORBIDDEN
@@ -268,6 +269,21 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(UnauthorizedRoleException.class)
+    public ResponseEntity<Error> handleUnauthorizedRoleException(UnauthorizedRoleException exception) {
+        log.warn("Access denied due to insufficient role");
+        log.debug("Access denied due to insufficient role details: {}", exception.getMessage());
+
+        Error errorResponse = new Error(
+                "You do not have permission to perform this action.",
+                HttpStatus.FORBIDDEN.value()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(errorResponse);
+    }
+
     @ExceptionHandler(ReviewNotFoundException.class)
     public ResponseEntity<Error> handleReviewNotFoundException(ReviewNotFoundException e) {
         log.warn("Review not found: {}", e.getMessage());
@@ -288,7 +304,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     public ResponseEntity<Error> handleAccessDeniedException(org.springframework.security.access.AccessDeniedException e) {
-        log.warn("Access denied: {}", e.getMessage());
+        log.warn("Access denied");
+        log.debug("Access denied details: {}", e.getMessage());
         return new ResponseEntity<>(
                 new Error(e.getMessage(), HttpStatus.FORBIDDEN.value()),
                 HttpStatus.FORBIDDEN

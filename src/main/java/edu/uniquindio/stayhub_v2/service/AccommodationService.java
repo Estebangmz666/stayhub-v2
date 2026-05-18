@@ -8,7 +8,6 @@ import edu.uniquindio.stayhub_v2.dto.accommodation.UnavailableAccommodationDateR
 import edu.uniquindio.stayhub_v2.exception.AccommodationNotFoundException;
 import edu.uniquindio.stayhub_v2.mapper.AccommodationMapper;
 import edu.uniquindio.stayhub_v2.model.Accommodation;
-import edu.uniquindio.stayhub_v2.model.Role;
 import edu.uniquindio.stayhub_v2.model.User;
 import edu.uniquindio.stayhub_v2.repository.AccommodationRepository;
 import lombok.RequiredArgsConstructor;
@@ -94,14 +93,13 @@ public class AccommodationService {
     private final AccommodationMapper accommodationMapper;
     private final ReservationRepository reservationRepository;
     private final UserService userService;
+    private final AuthorizationService authorizationService;
 
     @Transactional
     public CreateAccommodationResponseDTO createAccommodation(CreateAccommodationRequestDTO requestDTO) {
         User currentUser = userService.getCurrentUser();
 
-        if (currentUser.getRoles() == null || !currentUser.getRoles().contains(Role.HOST)) {
-            throw new UnauthorizedHostException("Only users with the HOST role can register hosting.");
-        }
+        authorizationService.requireHostRole(currentUser);
 
         Accommodation accommodation = accommodationMapper.toEntity(requestDTO);
         accommodation.setHost(currentUser);
@@ -335,6 +333,9 @@ public class AccommodationService {
                 });
 
         // 2. Validate host ownership
+
+        authorizationService.requireHostRole(currentUser);
+
         if (!accommodation.getHost().getId().equals(currentUser.getId())) {
             log.warn("Deactivation denied: User {} attempted to deactivate accommodation {} owned by {}",
                     email, id, accommodation.getHost().getEmail());

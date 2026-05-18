@@ -2,7 +2,7 @@ package edu.uniquindio.stayhub_v2.service;
 
 import edu.uniquindio.stayhub_v2.dto.host.HostAccommodationMetricsProjection;
 import edu.uniquindio.stayhub_v2.dto.host.HostAccommodationMetricsResponseDTO;
-import edu.uniquindio.stayhub_v2.exception.UnauthorizedHostException;
+import edu.uniquindio.stayhub_v2.exception.UnauthorizedRoleException;
 import edu.uniquindio.stayhub_v2.model.Role;
 import edu.uniquindio.stayhub_v2.model.User;
 import edu.uniquindio.stayhub_v2.repository.AccommodationRepository;
@@ -26,9 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class HostMetricsServiceTest {
@@ -157,7 +155,7 @@ class HostMetricsServiceTest {
                 0,
                 10
         ))
-                .isInstanceOf(UnauthorizedHostException.class)
+                .isInstanceOf(UnauthorizedRoleException.class)
                 .hasMessageContaining("HOST role");
 
         verify(accommodationRepository, never()).findHostAccommodationMetricsByPeriod(

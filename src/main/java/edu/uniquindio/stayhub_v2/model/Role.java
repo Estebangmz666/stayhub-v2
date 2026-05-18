@@ -101,7 +101,7 @@ public enum Role {
      *   <li>View and manage incoming reservations</li>
      *   <li>Communicate with guests</li>
      *   <li>Leave reviews for guests after completed stays</li>
-     *   <li>Access host dashboard with analytics and earnings</li>
+     *   <li>Access the host dashboard with analytics and earnings</li>
      * </ul>
      *
      * <p><b>Restrictions:</b> Hosts cannot book their own accommodations.
@@ -115,13 +115,9 @@ public enum Role {
      * <ul>
      *   <li>Maintaining accurate listing information</li>
      *   <li>Honoring confirmed reservations</li>
-     *   <li>Providing a safe and clean accommodation</li>
+     *   <li>Providing safe and clean accommodation</li>
      *   <li>Complying with local laws and regulations</li>
      * </ul>
      */
     HOST
-
-    // Future roles to consider:
-    // ADMIN - Platform administrator with full system access
-    // SUPER_HOST - Experienced hosts with special privileges and badges
 }

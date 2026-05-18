@@ -311,6 +311,7 @@ public class UserService {
                     log.warn("Login failed: User not found with email: {}", userLoginRequestDTO.email());
                     return new InvalidPasswordException("Invalid credentials");
                 });
+
         log.debug("User found with email: {}", user.getEmail());
 
         // Verify password
@@ -512,7 +513,6 @@ public class UserService {
                 El equipo de StayHub 🏡
                \s""", fullName, code);
     }
-
     @Transactional
     public void changePassword(@Valid ChangePasswordRequestDTO requestDTO) {
         User currentUser = getCurrentUser();

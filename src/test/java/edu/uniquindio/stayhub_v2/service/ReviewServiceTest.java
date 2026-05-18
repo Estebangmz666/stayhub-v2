@@ -5,13 +5,9 @@ import edu.uniquindio.stayhub_v2.dto.review.RespondReviewRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.review.ReviewResponseDTO;
 import edu.uniquindio.stayhub_v2.exception.AccommodationNotFoundException;
 import edu.uniquindio.stayhub_v2.exception.ReviewPolicyViolationException;
+import edu.uniquindio.stayhub_v2.exception.UnauthorizedRoleException;
 import edu.uniquindio.stayhub_v2.mapper.ReviewMapper;
-import edu.uniquindio.stayhub_v2.model.Accommodation;
-import edu.uniquindio.stayhub_v2.model.Reservation;
-import edu.uniquindio.stayhub_v2.model.ReservationStatus;
-import edu.uniquindio.stayhub_v2.model.Review;
-import edu.uniquindio.stayhub_v2.model.Role;
-import edu.uniquindio.stayhub_v2.model.User;
+import edu.uniquindio.stayhub_v2.model.*;
 import edu.uniquindio.stayhub_v2.repository.AccommodationRepository;
 import edu.uniquindio.stayhub_v2.repository.ReservationRepository;
 import edu.uniquindio.stayhub_v2.repository.ReviewRepository;
@@ -31,9 +27,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class ReviewServiceTest {
@@ -230,15 +224,14 @@ class ReviewServiceTest {
     }
 
     @Test
-    void respondToReview_NonHost_ThrowsAccessDeniedException() {
+    void respondToReview_NonHost_ThrowsUnauthorizedRoleException() {
         RespondReviewRequestDTO request = new RespondReviewRequestDTO("Gracias por tu visita.");
 
         when(userService.getCurrentUser()).thenReturn(guest);
-        when(reviewRepository.findById(200L)).thenReturn(Optional.of(review));
 
         assertThatThrownBy(() -> reviewService.respondToReview(200L, request))
-                .isInstanceOf(AccessDeniedException.class)
-                .hasMessageContaining("Only the host");
+                .isInstanceOf(UnauthorizedRoleException.class)
+                .hasMessageContaining("HOST role");
 
         verify(reviewRepository, never()).save(any());
     }
