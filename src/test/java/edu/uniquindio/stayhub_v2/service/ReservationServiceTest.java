@@ -65,6 +65,7 @@ class ReservationServiceTest {
     private Accommodation accommodation;
     private User guest;
     private User host;
+    private User admin;
     private Reservation savedReservation;
 
     private static final String BANK_ACCOUNT = "3001234567890";
@@ -89,6 +90,13 @@ class ReservationServiceTest {
                 .email("host@mail.com")
                 .fullName("Laura Host")
                 .roles(Set.of(Role.HOST))
+                .build();
+
+        admin = User.builder()
+                .id(3L)
+                .email("admin@mail.com")
+                .fullName("Admin User")
+                .roles(Set.of(Role.ADMIN))
                 .build();
 
         accommodation = Accommodation.builder()
@@ -491,6 +499,44 @@ class ReservationServiceTest {
                 .isInstanceOf(ReservationNotFoundException.class)
                 .hasMessageContaining("100");
 
+        verify(reservationMapper, never()).toRetrieveDTO(any());
+    }
+
+    @Test
+    void getReservationByIdOnAdminActions_AdminUser_ReturnsReservation() {
+        when(userService.getCurrentUser()).thenReturn(admin);
+        when(reservationRepository.findById(100L)).thenReturn(Optional.of(savedReservation));
+        when(reservationMapper.toRetrieveDTO(savedReservation)).thenReturn(retrieveDto());
+
+        RetrieveReservationResponseDTO response = reservationService.getReservationByIdOnAdminActions(100L);
+
+        assertThat(response.id()).isEqualTo(100L);
+        assertThat(response.accommodationId()).isEqualTo(accommodation.getId());
+        verify(reservationRepository).findById(100L);
+        verify(reservationRepository, never()).findAuthorizedById(any(), any());
+    }
+
+    @Test
+    void getReservationByIdOnAdminActions_ReservationNotFound_ThrowsReservationNotFoundException() {
+        when(userService.getCurrentUser()).thenReturn(admin);
+        when(reservationRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> reservationService.getReservationByIdOnAdminActions(999L))
+                .isInstanceOf(ReservationNotFoundException.class)
+                .hasMessageContaining("999");
+
+        verify(reservationMapper, never()).toRetrieveDTO(any());
+    }
+
+    @Test
+    void getReservationByIdOnAdminActions_NonAdminUser_ThrowsUnauthorizedRoleException() {
+        when(userService.getCurrentUser()).thenReturn(host);
+
+        assertThatThrownBy(() -> reservationService.getReservationByIdOnAdminActions(100L))
+                .isInstanceOf(UnauthorizedRoleException.class)
+                .hasMessageContaining("ADMIN role");
+
+        verify(reservationRepository, never()).findById(any());
         verify(reservationMapper, never()).toRetrieveDTO(any());
     }
 

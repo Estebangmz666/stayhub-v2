@@ -106,7 +106,7 @@ import java.util.Locale;
  * }
  * }</pre>
  *
- * @author Esteban Gómez León
+ * @author StayHub Dev Team
  * @version 1.0
  * @since 1.0
  * @see ReservationRepository
@@ -544,6 +544,33 @@ public class ReservationService {
         return reservationMapper.toRetrieveDTO(reservation);
     }
 
+    @Transactional(readOnly = true)
+    public RetrieveReservationResponseDTO getReservationByIdOnAdminActions(Long reservationId) {
+
+        log.info("Retrieving reservation with ID: {} on admin actions", reservationId);
+
+        // 1. Get the authenticated user and require ADMIN role
+        User currentUser = userService.getCurrentUser();
+        authorizationService.requireAdminRole(currentUser);
+        log.debug("Authenticated user: {} (ID: {})", currentUser.getEmail(), currentUser.getId());
+
+        // 2. ADMIN can retrieve any reservation by its ID
+        Reservation reservation = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> {
+                    log.warn("Reservation not found with ID: {} for admin user {}",
+                            reservationId, currentUser.getEmail());
+                    return new ReservationNotFoundException(
+                            "Reservation with ID " + reservationId + " not found"
+                    );
+                });
+
+        log.info("Reservation {} retrieved successfully by admin user {}",
+                reservationId, currentUser.getEmail());
+
+        // 3. Map to the full detail DTO and return
+        return reservationMapper.toRetrieveDTO(reservation);
+    }
+
     /**
      * Retrieves a paginated list of reservations for the authenticated user.
      * If the user has the HOST role, returns reservations for all their accommodations.
@@ -575,7 +602,7 @@ public class ReservationService {
 
         if (normalizedScope.isBlank()) {
             // Backward compatibility: host-first behavior
-            boolean isHost = authorizationService.hasRole(currentUser, Role.HOST);
+            boolean isHost = authorizationService.canAccessHostReservations(currentUser);
             if (isHost) {
                 log.debug("No scope provided; applying legacy host-first behavior for user {}",
                         currentUser.getEmail());

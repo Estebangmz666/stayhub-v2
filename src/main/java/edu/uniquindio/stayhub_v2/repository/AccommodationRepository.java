@@ -31,7 +31,7 @@ import java.time.LocalDateTime;
  *   <li>{@code count()} - Count total accommodations</li>
  * </ul>
  *
- * <p><b>⚠️ Soft-Delete Consideration:</b></p>
+ * <p><b>Soft-Delete Consideration:</b></p>
  * Most queries should exclude soft-deleted accommodations using the
  * {@code deleted = false} condition. The custom method
  * {@link #findByIdAndDeletedFalse(Long)} provides this functionality.
@@ -62,7 +62,7 @@ import java.time.LocalDateTime;
  * SELECT a FROM Accommodation a WHERE a.id = :id AND a.deleted = false
  * </pre>
  *
- * @author Esteban Gómez León
+ * @author StayHub Dev Team
  * @version 1.0
  * @since 1.0
  * @see JpaRepository
@@ -113,6 +113,51 @@ public interface AccommodationRepository extends JpaRepository<Accommodation, Lo
      */
     Optional<Accommodation> findByIdAndDeletedFalse(Long id);
 
+    /**
+     * Finds an available accommodation by ID with a pessimistic write lock.
+     *
+     * <p>This method acquires a {@link LockModeType#PESSIMISTIC_WRITE} lock on the
+     * database row to prevent concurrent modifications. It is essential for
+     * booking operations where race conditions could lead to double-booking.</p>
+     *
+     * <p><b>Lock Behavior:</b></p>
+     * <ul>
+     *   <li>The lock is held until the transaction completes</li>
+     *   <li>Other transactions attempting to lock the same row will block</li>
+     *   <li>Prevents concurrent updates to the availability status</li>
+     * </ul>
+     *
+     * <p><b>Query Conditions:</b></p>
+     * <ul>
+     *   <li>Accommodation must NOT be soft-deleted ({@code deleted = false})</li>
+     *   <li>Accommodation must be available ({@code available = true})</li>
+     *   <li>Accommodation must exist with the specified ID</li>
+     * </ul>
+     *
+     * <p><b>Usage Pattern:</b></p>
+     * <pre>{@code
+     * @Transactional
+     * public Reservation bookAccommodation(Long accommodationId) {
+     *     Accommodation accommodation = accommodationRepository
+     *         .findAvailableByIdWithWriteLock(accommodationId)
+     *         .orElseThrow(() -> new AccommodationNotAvailableException(
+     *             "Accommodation not found or not available: " + accommodationId));
+     *
+     *     // Check availability, create reservation, update accommodation status
+     *     accommodation.setAvailable(false);
+     *     return accommodationRepository.save(accommodation);
+     * }
+     * }</pre>
+     *
+     * <p><b>Important:</b> This method MUST be called within a transactional context
+     * ({@code @Transactional}) for the lock to be properly managed.</p>
+     *
+     * @param id The unique identifier of the accommodation to find and lock
+     * @return An {@code Optional} containing the locked accommodation if found,
+     *         otherwise an empty {@code Optional}
+     * @throws org.springframework.dao.CannotAcquireLockException if the lock cannot be acquired
+     * @see LockModeType#PESSIMISTIC_WRITE
+     */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
     SELECT a FROM Accommodation a
@@ -122,10 +167,116 @@ public interface AccommodationRepository extends JpaRepository<Accommodation, Lo
 """)
     Optional<Accommodation> findAvailableByIdWithWriteLock(@Param("id") Long id);
 
+    /**
+     * Retrieves a paginated list of available accommodations in a specific city.
+     *
+     * <p>This method performs a case-insensitive search for accommodations matching
+     * the city name, filtering out soft-deleted accommodations and those marked
+     * as unavailable.</p>
+     *
+     * <p><b>Filtering Logic:</b></p>
+     * <ul>
+     *   <li>City name matching (case-insensitive, partial matches are possible)</li>
+     *   <li>Only non-deleted accommodations ({@code deleted = false})</li>
+     *   <li>Only available accommodations ({@code available = true})</li>
+     * </ul>
+     *
+     * <p><b>Pagination:</b> Results are returned in a {@link Page} object that
+     * includes metadata about the total number of records, current page, and
+     * sorting information.</p>
+     *
+     * <p><b>Usage Pattern:</b></p>
+     * <pre>{@code
+     * Pageable pageable = PageRequest.of(0, 20, Sort.by("title").ascending());
+     * Page<Accommodation> results = accommodationRepository
+     *     .findByCityContainingIgnoreCaseAndDeletedFalseAndAvailableTrue(
+     *         "New York", pageable);
+     *
+     * System.out.println("Total available: " + results.getTotalElements());
+     * results.forEach(accommodation -> {
+     *     // Process each accommodation
+     * });
+     * }</pre>
+     *
+     * @param city The city name to search for (case-insensitive, can be partial)
+     * @param pageable Pagination information (page number, page size, sorting)
+     * @return A {@code Page} of available accommodations matching the city criteria,
+     *         never null (empty page if no matches found)
+     * @throws IllegalArgumentException if pageable is null
+     */
     Page<Accommodation> findByCityContainingIgnoreCaseAndDeletedFalseAndAvailableTrue(
             String city,
             Pageable pageable);
 
+    /**
+     * Retrieves aggregated metrics for a host's accommodations within a specific
+     * date period.
+     *
+     * <p>This complex native query provides comprehensive statistics about
+     * reservations and reviews for all active accommodations belonging to a host.
+     * It joins reservation and review data to calculate key performance metrics.</p>
+     *
+     * <p><b>Metrics Calculated:</b></p>
+     * <ul>
+     *   <li><b>Reservation Metrics:</b>
+     *     <ul>
+     *       <li>Total reservations in period</li>
+     *       <li>Active reservations in period</li>
+     *       <li>Cancelled reservations in period</li>
+     *       <li>Reserved revenue in period</li>
+     *       <li>Count of paid deposits</li>
+     *       <li>Total amount of paid deposits</li>
+     *     </ul>
+     *   </li>
+     *   <li><b>Review Metrics:</b>
+     *     <ul>
+     *       <li>Average rating across all reviews</li>
+     *     </ul>
+     *   </li>
+     * </ul>
+     *
+     * <p><b>Period Logic:</b></p>
+     * <ul>
+     *   <li>Reservations are included if they overlap with the period:
+     *       {@code start_date < periodEndExclusive AND end_date >= periodStart}</li>
+     *   <li>The period end is exclusive ({@code <}) to define clean boundaries</li>
+     *   <li>The period start is inclusive ({@code >=})</li>
+     * </ul>
+     *
+     * <p><b>Query Behavior:</b></p>
+     * <ul>
+     *   <li>Returns all non-deleted accommodations for the host, even those with
+     *       no reservations (metrics will be zero)</li>
+     *   <li>Accommodations with no reviews will have null average rating (may be
+     *       zero or null in projection)</li>
+     *   <li>Results are ordered alphabetically by accommodation title</li>
+     *   <li>Results are paginated for performance</li>
+     * </ul>
+     *
+     * <p><b>Usage Pattern:</b></p>
+     * <pre>{@code
+     * LocalDateTime startDate = LocalDateTime.now().minusMonths(1);
+     * LocalDateTime endDate = LocalDateTime.now();
+     * Pageable pageable = PageRequest.of(0, 10);
+     *
+     * Page<HostAccommodationMetricsProjection> metrics = accommodationRepository
+     *     .findHostAccommodationMetricsByPeriod(hostId, startDate, endDate, pageable);
+     *
+     * metrics.forEach(metric -> {
+     *     System.out.println("Accommodation: " + metric.getAccommodationTitle());
+     *     System.out.println("Total Revenue: " + metric.getReservedRevenueInPeriod());
+     *     System.out.println("Average Rating: " + metric.getAverageRating());
+     * });
+     * }</pre>
+     *
+     * @param hostId The ID of the host whose accommodations to analyze (must not be null)
+     * @param periodStart The start date-time of the analysis period (inclusive)
+     * @param periodEndExclusive The end date-time of the analysis period (exclusive)
+     * @param pageable Pagination information for the results
+     * @return A paginated list of metric projections for the host's accommodations,
+     *         never null
+     * @throws IllegalArgumentException if any parameter is null
+     */
     @Query(
             value = """
             SELECT
@@ -183,45 +334,50 @@ public interface AccommodationRepository extends JpaRepository<Accommodation, Lo
             Pageable pageable
     );
 
-    /*
-     * Additional query methods that could be added in the future:
+    /**
+     * Finds an active, available accommodation by its unique identifier.
      *
-     * // Find all active accommodations
-     * List<Accommodation> findAllByDeletedFalse();
+     * <p>This method combines the soft-delete filter with availability checking,
+     * ensuring that the returned accommodation is both not deleted and currently
+     * available for booking. It is ideal for search and display operations where
+     * only bookable accommodations should be shown.</p>
      *
-     * // Find active accommodations by host
-     * List<Accommodation> findByHostIdAndDeletedFalse(Long hostId);
+     * <p><b>Query Conditions:</b></p>
+     * <ul>
+     *   <li>Accommodation must NOT be soft-deleted ({@code deleted = false})</li>
+     *   <li>Accommodation must be available for booking ({@code available = true})</li>
+     *   <li>Accommodation must exist with the specified ID</li>
+     * </ul>
      *
-     * // Find active accommodations by city
-     * List<Accommodation> findByCityAndDeletedFalse(String city);
+     * <p><b>Difference from {@link #findByIdAndDeletedFalse(Long)}:</b></p>
+     * <ul>
+     *   <li>{@code findByIdAndDeletedFalse} only checks soft-delete status</li>
+     *   <li>This method additionally checks the availability flag</li>
+     * </ul>
      *
-     * // Find active accommodations within price range
-     * List<Accommodation> findByPricePerNightBetweenAndDeletedFalse(
-     *     BigDecimal minPrice, BigDecimal maxPrice);
+     * <p><b>Usage Pattern:</b></p>
+     * <pre>{@code
+     * // For displaying search results or bookable accommodations
+     * Optional<Accommodation> accommodation = accommodationRepository
+     *     .findByIdAndDeletedFalseAndAvailableTrue(accommodationId);
      *
-     * // Find active accommodations by capacity
-     * List<Accommodation> findByCapacityGreaterThanEqualAndDeletedFalse(
-     *     Integer minCapacity);
+     * if (accommodation.isPresent()) {
+     *     // Show accommodation details and allow booking
+     * } else {
+     *     // Show message that accommodation is not available
+     * }
      *
-     * // Check if active accommodation exists
-     * boolean existsByIdAndDeletedFalse(Long id);
+     * // For detailed view that includes unavailable but not deleted accommodations
+     * // use findByIdAndDeletedFalse instead
+     * }</pre>
      *
-     * // Count active accommodations by host
-     * long countByHostIdAndDeletedFalse(Long hostId);
+     * <p><b>Performance:</b> Uses the primary key index plus two boolean checks,
+     * making this query very efficient.</p>
      *
-     * // Find available accommodations for date range (requires custom @Query)
-     * @Query("""
-     *     SELECT a FROM Accommodation a
-     *     WHERE a.deleted = false
-     *     AND a.available = true
-     *     AND a.id NOT IN (
-     *         SELECT r.accommodation.id FROM Reservation r
-     *         WHERE r.status = 'ACTIVE'
-     *         AND ((r.startDate <= :endDate) AND (r.endDate >= :startDate))
-     *     )
-     * """)
-     * List<Accommodation> findAvailableAccommodations(
-     *     @Param("startDate") LocalDateTime startDate,
-     *     @Param("endDate") LocalDateTime endDate);
+     * @param id The unique identifier of the accommodation to find
+     * @return An {@code Optional} containing the accommodation if it exists,
+     *         is not deleted, and is available; otherwise an empty {@code Optional}
+     * @see #findByIdAndDeletedFalse(Long)
      */
+    Optional<Accommodation> findByIdAndDeletedFalseAndAvailableTrue(Long id);
 }

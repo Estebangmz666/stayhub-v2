@@ -357,4 +357,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest()
                 .body(new Error("Malformed request body", HttpStatus.BAD_REQUEST.value()));
     }
+
+    @ExceptionHandler(InvalidSignupRoleException.class)
+    public ResponseEntity<Error> handleInvalidSignupRoleException(InvalidSignupRoleException e) {
+        log.warn("Invalid signup role");
+        return new ResponseEntity<>(
+                new Error(e.getMessage(), HttpStatus.BAD_REQUEST.value()),
+                HttpStatus.BAD_REQUEST
+        );
+    }
 }

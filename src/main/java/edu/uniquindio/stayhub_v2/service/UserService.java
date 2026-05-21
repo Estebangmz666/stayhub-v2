@@ -13,6 +13,7 @@ import edu.uniquindio.stayhub_v2.dto.user.profileUpdate.UserProfileUpdateRequest
 import edu.uniquindio.stayhub_v2.dto.user.profileUpdate.UserProfileUpdateResponseDTO;
 import edu.uniquindio.stayhub_v2.exception.*;
 import edu.uniquindio.stayhub_v2.mapper.UserMapper;
+import edu.uniquindio.stayhub_v2.model.Role;
 import edu.uniquindio.stayhub_v2.model.User;
 import edu.uniquindio.stayhub_v2.repository.UserRepository;
 import jakarta.validation.Valid;
@@ -240,6 +241,9 @@ public class UserService {
             throw new EmailAlreadyExistsException("Email already exists");
         }
 
+        // Validate signup roles
+        validateRoles(userSignupRequestDTO);
+
         // Map DTO to entity
         User user = userMapper.toEntity(userSignupRequestDTO);
         log.debug("User mapped to entity successfully: {}", user.getEmail());
@@ -253,6 +257,17 @@ public class UserService {
         log.info("User registered successfully: {} (ID: {})", savedUser.getEmail(), savedUser.getId());
 
         return userMapper.toSignupResponseDTO(savedUser);
+    }
+
+    private void validateRoles(UserSignupRequestDTO userSignupRequestDTO) {
+        if (userSignupRequestDTO.roles() == null || userSignupRequestDTO.roles().isEmpty()) {
+            log.warn("Registration failed: No roles provided for user: {}", userSignupRequestDTO.email());
+            throw new InvalidSignupRoleException("No roles provided.");
+        }
+        if (userSignupRequestDTO.roles().contains(Role.ADMIN)) {
+            log.warn("Registration failed: Admin role provided for user: {}", userSignupRequestDTO.email());
+            throw new InvalidSignupRoleException("You cannot sign up as an admin.");
+        }
     }
 
     /**
@@ -356,17 +371,6 @@ public class UserService {
      * }
      * }</pre>
      *
-     * <p><b>Email Content Example:</b></p>
-     * <pre>
-     * Hola John Doe,
-     *
-     * Has solicitado recuperar tu contraseña. Usa el siguiente código para reestablecerla:
-     *
-     * Código: 123456
-     *
-     * Este código es válido por 15 minutos.
-     * </pre>
-     *
      * @param requestDTO The forgot password request containing user email
      * @throws UserNotFoundException if no user exists with the given email
      */
@@ -390,7 +394,7 @@ public class UserService {
 
         // Build and send email
         String text = buildRecoveryEmailText(user.getFullName(), code);
-        emailService.sendEmail(user.getEmail(), "Recuperación de contraseña - StayHub", text);
+        emailService.sendEmail(user.getEmail(), "Password recovery - StayHub", text);
 
         log.info("Recovery code sent to email: {}", user.getEmail());
     }
@@ -447,14 +451,14 @@ public class UserService {
         if (user.getPasswordRecoveryCode() == null ||
                 !user.getPasswordRecoveryCode().equals(requestDTO.code())) {
             log.warn("Reset password failed: Invalid recovery code for email: {}", requestDTO.email());
-            throw new InvalidRecoveryCodeException("El código de recuperación es inválido");
+            throw new InvalidRecoveryCodeException("The recovery code is invalid.");
         }
 
         // Validate code expiration
         if (user.getPasswordRecoveryExpiration() == null ||
                 user.getPasswordRecoveryExpiration().isBefore(LocalDateTime.now())) {
             log.warn("Reset password failed: Expired recovery code for email: {}", requestDTO.email());
-            throw new InvalidRecoveryCodeException("El código de recuperación ha expirado");
+            throw new InvalidRecoveryCodeException("The recovery code has expired");
         }
 
         // Update password and clear recovery data
@@ -498,19 +502,19 @@ public class UserService {
      */
     private String buildRecoveryEmailText(String fullName, String code) {
         return String.format("""
-                Hola %s,
+                Hello %s,
                \s
-                Has solicitado recuperar tu contraseña en StayHub.\s
-                Usa el siguiente código para reestablecerla:
+                You have requested to recover your password on StayHub.\s
+                Use the following code to reset it.:
                \s
-                Código: %s
+                Code: %s
                \s
-                Este código es válido por 15 minutos.
+                This code is valid for 15 minutes.
                \s
-                Si no solicitaste este cambio, puedes ignorar este mensaje.
+                If you did not request this change, you can ignore this message..
                \s
-                Saludos,
-                El equipo de StayHub 🏡
+                Greetings,
+                The StayHub Team
                \s""", fullName, code);
     }
     @Transactional
@@ -523,7 +527,7 @@ public class UserService {
 
         if (!passwordEncoder.matches(requestDTO.currentPassword(), user.getPassword())) {
             log.warn("Invalid current password attempt for changing password");
-            throw new InvalidPasswordException("La contraseña actual es incorrecta");
+            throw new InvalidPasswordException("The current password is incorrect.");
         }
 
         user.setPassword(passwordEncoder.encode(requestDTO.newPassword()));

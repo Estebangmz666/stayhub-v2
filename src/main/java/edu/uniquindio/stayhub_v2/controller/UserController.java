@@ -62,7 +62,9 @@ public class UserController {
                             schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class),
                             examples = {
                                     @ExampleObject(name = "Invalid email", value = "{\"message\": \"Invalid email format\", \"code\": 400}"),
-                                    @ExampleObject(name = "Empty email", value = "{\"message\": \"Email is required\", \"code\": 400}")
+                                    @ExampleObject(name = "Empty email", value = "{\"message\": \"Email is required\", \"code\": 400}"),
+                                    @ExampleObject(name = "Invalid Signup Role", value = "{\"message\": \"Invalid signup role\", \"code\": 400}"),
+                                    @ExampleObject(name = "Email already exists", value = "{\"message\": \"Email already exists\", \"code\": 400}")
                             })),
 
     })
@@ -319,6 +321,158 @@ public class UserController {
         return ResponseEntity.ok(userProfileResponseDTO);
     }
 
+    @Operation(
+            summary = "Update authenticated user profile",
+            description = """
+            Updates the profile information of the currently authenticated user.
+
+            This endpoint requires a valid JWT Bearer token. The authenticated user is resolved
+            from the Spring Security context, then the received profile data is validated and
+            applied to the current user account.
+
+            The request body must contain the profile fields allowed for update. Fields that are
+            not supported by the update DTO should not be sent by the client.
+
+            Update flow:
+            1. The JWT filter validates the token.
+            2. The authenticated principal is stored in the SecurityContext.
+            3. The request body is validated using Bean Validation.
+            4. The service resolves the current user and updates the allowed profile fields.
+            5. The updated profile information is returned as a UserProfileUpdateResponseDTO.
+            """,
+            security = {
+                    @SecurityRequirement(name = "bearerAuth")
+            }
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Authenticated user profile updated successfully",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = UserProfileUpdateResponseDTO.class),
+                            examples = @ExampleObject(
+                                    name = "Successful response",
+                                    summary = "Updated user profile",
+                                    value = """
+                                    {
+                                      "id": 1,
+                                      "firstName": "John",
+                                      "lastName": "Doe",
+                                      "phoneNumber": "+573001112233",
+                                      "message": "Profile updated successfully"
+                                    }
+                                    """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = """
+                    Bad request. The request body contains invalid data, missing required fields,
+                    or values that do not satisfy validation constraints.
+                    """,
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class),
+                            examples = @ExampleObject(
+                                    name = "Validation error response",
+                                    summary = "Invalid request body",
+                                    value = """
+                                    {
+                                      "message": "Invalid profile update data",
+                                      "code": 400
+                                    }
+                                    """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = """
+                    Unauthorized. The request does not contain a valid JWT token,
+                    the token is missing, expired, malformed, or could not be authenticated.
+                    """,
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class),
+                            examples = @ExampleObject(
+                                    name = "Unauthorized response",
+                                    summary = "Missing or invalid token",
+                                    value = """
+                                    {
+                                      "message": "Authentication is required to access this resource",
+                                      "code": 401
+                                    }
+                                    """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = """
+                    Forbidden. The user is authenticated but does not have permission
+                    to update this resource, or the SecurityContext does not contain
+                    a valid authenticated principal.
+                    """,
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class),
+                            examples = @ExampleObject(
+                                    name = "Forbidden response",
+                                    summary = "Access denied",
+                                    value = """
+                                    {
+                                      "message": "User not authenticated",
+                                      "code": 403
+                                    }
+                                    """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = """
+                    Not found. The JWT token was valid, but the user referenced by the
+                    authenticated principal could not be found in the database.
+                    """,
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class),
+                            examples = @ExampleObject(
+                                    name = "User not found response",
+                                    summary = "Authenticated user does not exist in database",
+                                    value = """
+                                    {
+                                      "message": "User not found with email: john.doe@example.com",
+                                      "code": 404
+                                    }
+                                    """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "500",
+                    description = """
+                    Internal server error. An unexpected error occurred while updating
+                    the authenticated user profile.
+                    """,
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class),
+                            examples = @ExampleObject(
+                                    name = "Internal server error response",
+                                    summary = "Unexpected server error",
+                                    value = """
+                                    {
+                                      "message": "Unexpected error while updating user profile",
+                                      "code": 500
+                                    }
+                                    """
+                            )
+                    )
+            )
+    })
     @PatchMapping("/me")
     public ResponseEntity<UserProfileUpdateResponseDTO> updateMyProfile(
             @Valid @RequestBody UserProfileUpdateRequestDTO userProfileUpdateRequestDTO
@@ -328,10 +482,134 @@ public class UserController {
         return ResponseEntity.ok(userProfileUpdateResponseDTO);
     }
 
+    @Operation(
+            summary = "Delete authenticated user account",
+            description = """
+            Soft deletes the account of the currently authenticated user.
+
+            This endpoint requires a valid JWT Bearer token. The authenticated user is resolved
+            from the Spring Security context, then the account is marked as deleted instead of
+            being permanently removed from the database.
+
+            Deletion flow:
+            1. The JWT filter validates the token.
+            2. The authenticated principal is stored in the SecurityContext.
+            3. The service resolves the current user.
+            4. The user account is soft deleted.
+            5. A confirmation message is returned.
+            """,
+            security = {
+                    @SecurityRequirement(name = "bearerAuth")
+            }
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Authenticated user account deleted successfully",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = MessageResponseDTO.class),
+                            examples = @ExampleObject(
+                                    name = "Successful response",
+                                    summary = "Account deleted",
+                                    value = """
+                                    {
+                                      "message": "Your account has been deleted successfully. Hope to see you again soon!"
+                                    }
+                                    """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = """
+                    Unauthorized. The request does not contain a valid JWT token,
+                    the token is missing, expired, malformed, or could not be authenticated.
+                    """,
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class),
+                            examples = @ExampleObject(
+                                    name = "Unauthorized response",
+                                    summary = "Missing or invalid token",
+                                    value = """
+                                    {
+                                      "message": "Authentication is required to access this resource",
+                                      "code": 401
+                                    }
+                                    """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = """
+                    Forbidden. The user is authenticated but does not have permission
+                    to delete this resource, or the SecurityContext does not contain
+                    a valid authenticated principal.
+                    """,
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class),
+                            examples = @ExampleObject(
+                                    name = "Forbidden response",
+                                    summary = "Access denied",
+                                    value = """
+                                    {
+                                      "message": "User not authenticated",
+                                      "code": 403
+                                    }
+                                    """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = """
+                    Not found. The JWT token was valid, but the user referenced by the
+                    authenticated principal could not be found in the database.
+                    """,
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class),
+                            examples = @ExampleObject(
+                                    name = "User not found response",
+                                    summary = "Authenticated user does not exist in database",
+                                    value = """
+                                    {
+                                      "message": "User not found with email: john.doe@example.com",
+                                      "code": 404
+                                    }
+                                    """
+                            )
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "500",
+                    description = """
+                    Internal server error. An unexpected error occurred while deleting
+                    the authenticated user account.
+                    """,
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = edu.uniquindio.stayhub_v2.dto.auth.Error.class),
+                            examples = @ExampleObject(
+                                    name = "Internal server error response",
+                                    summary = "Unexpected server error",
+                                    value = """
+                                    {
+                                      "message": "Unexpected error while deleting user account",
+                                      "code": 500
+                                    }
+                                    """
+                            )
+                    )
+            )
+    })
     @DeleteMapping("/me")
-    public ResponseEntity<MessageResponseDTO> deleteMyAccount(){
-            log.info("Processing delete my account request");
-            userService.softDeleteCurrentUser();
-            return ResponseEntity.ok(new MessageResponseDTO("Your account has been deleted successfully. Hope to see you again soon!"));
+    public ResponseEntity<MessageResponseDTO> deleteMyAccount() {
+        log.info("Processing delete my account request");
+        userService.softDeleteCurrentUser();
+        return ResponseEntity.ok(new MessageResponseDTO("Your account has been deleted successfully. Hope to see you again soon!"));
     }
 }

@@ -10,6 +10,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
@@ -17,7 +19,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.List;
 
 /**
  * JWT Authentication Filter that intercepts HTTP requests to validate JWT tokens.
@@ -41,7 +43,7 @@ import java.util.Collections;
  * 6. Continue a filter chain
  * </pre>
  *
- * @author Esteban Gómez León
+ * @author StayHub Dev Team
  * @version 1.0
  * @since 1.0
  * @see OncePerRequestFilter
@@ -98,16 +100,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // Only authenticate if email was extracted and no existing authentication
         if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 
-            User user = userRepository.findByEmailAndDeletedFalse(email)
+            User user = userRepository.findByEmailAndDeletedFalseWithRoles(email)
                     .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-            // Create authentication token with user details
-            // Note: Empty authorities list - consider implementing proper role loading
+            List<GrantedAuthority> authorities = user.getRoles().stream()
+                    .<GrantedAuthority>map(role -> new SimpleGrantedAuthority("ROLE_" + role.name()))
+                    .toList();
+
+            // Create authentication token with user details and resolved authorities
             UsernamePasswordAuthenticationToken authToken =
                     new UsernamePasswordAuthenticationToken(
                             user,
                             null,  // No credentials needed for authenticated user
-                            Collections.emptyList()  // No authorities/roles loaded
+                            authorities
                     );
 
             // Attach request details for auditing purposes

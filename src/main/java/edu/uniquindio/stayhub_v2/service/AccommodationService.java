@@ -158,9 +158,9 @@ public class AccommodationService {
         log.debug("Retrieving accommodation with ID: {}", id);
 
         Accommodation accommodation = accommodationRepository
-                .findByIdAndDeletedFalse(id)
+                .findByIdAndDeletedFalseAndAvailableTrue(id)
                 .orElseThrow(() -> {
-                    log.warn("Accommodation not found or deleted with ID: {}", id);
+                    log.warn("Accommodation not found, deleted or unavailable with ID: {}", id);
                     return new AccommodationNotFoundException("Accommodation not found with id: " + id);
                 });
 
@@ -228,7 +228,7 @@ public class AccommodationService {
             throw new IllegalArgumentException("Size must be between 1 and 50");
         }
 
-        accommodationRepository.findByIdAndDeletedFalse(accommodationId)
+        accommodationRepository.findByIdAndDeletedFalseAndAvailableTrue(accommodationId)
                 .orElseThrow(() -> new AccommodationNotFoundException(
                         "Accommodation not found with id: " + accommodationId
                 ));
@@ -326,7 +326,7 @@ public class AccommodationService {
 
         // 1. Retrieve and validate accommodation existence
         Accommodation accommodation = accommodationRepository
-                .findByIdAndDeletedFalse(id)
+                .findByIdAndDeletedFalseAndAvailableTrue(id)
                 .orElseThrow(() -> {
                     log.warn("Deactivation failed: Accommodation not found with ID: {}", id);
                     return new AccommodationNotFoundException("Accommodation not found with id: " + id);

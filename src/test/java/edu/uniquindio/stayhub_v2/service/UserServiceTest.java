@@ -5,8 +5,13 @@ import edu.uniquindio.stayhub_v2.dto.auth.ForgotPasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.auth.ResetPasswordRequestDTO;
 import edu.uniquindio.stayhub_v2.dto.auth.TokenResponseDTO;
 import edu.uniquindio.stayhub_v2.dto.user.UserLoginRequestDTO;
+import edu.uniquindio.stayhub_v2.dto.user.UserSignupRequestDTO;
+import edu.uniquindio.stayhub_v2.dto.user.UserSignupResponseDTO;
 import edu.uniquindio.stayhub_v2.exception.InvalidPasswordException;
 import edu.uniquindio.stayhub_v2.exception.InvalidRecoveryCodeException;
+import edu.uniquindio.stayhub_v2.exception.InvalidSignupRoleException;
+import edu.uniquindio.stayhub_v2.mapper.UserMapper;
+import edu.uniquindio.stayhub_v2.model.Role;
 import edu.uniquindio.stayhub_v2.model.User;
 import edu.uniquindio.stayhub_v2.repository.UserRepository;
 import jakarta.validation.ConstraintViolation;
@@ -26,6 +31,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.Set;
@@ -35,10 +41,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 public class UserServiceTest {
@@ -54,6 +57,9 @@ public class UserServiceTest {
 
     @Mock
     private EmailService emailService;
+
+    @Mock
+    private UserMapper userMapper;
 
     @InjectMocks
     private UserService userService;
@@ -176,7 +182,7 @@ public class UserServiceTest {
 
         assertThatThrownBy(() -> userService.resetPassword(request))
                 .isInstanceOf(InvalidRecoveryCodeException.class)
-                .hasMessageContaining("expirado");
+                .hasMessageContaining("expired");
     }
 
     @Test
@@ -233,7 +239,7 @@ public class UserServiceTest {
 
         assertThatThrownBy(() -> userService.changePassword(request))
                 .isInstanceOf(InvalidPasswordException.class)
-                .hasMessageContaining("incorrecta");
+                .hasMessageContaining("incorrect");
 
         verify(userRepository).findByEmailAndDeletedFalseWithRoles(testUser.getEmail());
         verify(userRepository).findByEmailAndDeletedFalse(testUser.getEmail());
@@ -317,5 +323,202 @@ public class UserServiceTest {
         Set<ConstraintViolation<ChangePasswordRequestDTO>> violations = validator.validate(dto);
 
         assertThat(violations).isNotEmpty();
+    }
+
+    @Test
+    void registerUser_EmptyRoleSet_ThrowsInvalidSignupRolesException() {
+        UserSignupRequestDTO invalidRolesUser = new UserSignupRequestDTO(
+                "validEmail@gmail.com",
+                "validPassword",
+                Set.of(),
+                "John Giggity Doe",
+                "3053203050",
+                LocalDate.now(),
+                "validImageUrl.com");
+
+        assertThatThrownBy(() -> userService.registerUser(invalidRolesUser))
+                .isInstanceOf(InvalidSignupRoleException.class)
+                .hasMessageContaining("No roles provided");
+    }
+
+    @Test
+    void registerUser_InvalidSignupRole_ThrowsInvalidSignupRolesException() {
+        UserSignupRequestDTO invalidRolesUser = new UserSignupRequestDTO(
+                "validEmail@gmail.com",
+                "validPassword",
+                Set.of(Role.ADMIN),
+                "John Giggity Doe",
+                "3053203050",
+                LocalDate.now(),
+                "validImageUrl.com");
+
+        assertThatThrownBy(() -> userService.registerUser(invalidRolesUser))
+                .isInstanceOf(InvalidSignupRoleException.class)
+                .hasMessageContaining("You cannot sign up as an admin.");
+    }
+
+    @Test
+    void registerUser_ValidGuestRole_ReturnsUserSignupResponseDTO() {
+        UserSignupRequestDTO validUser = new UserSignupRequestDTO(
+                "validEmail@gmail.com",
+                "ValidPassword1",
+                Set.of(Role.GUEST),
+                "John Giggity Doe",
+                "+573053203050",
+                LocalDate.of(1998, 5, 10),
+                "https://valid-image-url.com/profile.jpg");
+
+        when(userRepository.findByEmail(validUser.email())).thenReturn(Optional.empty());
+        User mappedUser = User.builder()
+                .email(validUser.email())
+                .password(validUser.password())
+                .roles(validUser.roles())
+                .fullName(validUser.fullName())
+                .phoneNumber(validUser.phoneNumber())
+                .birthDate(validUser.birthDate())
+                .profilePicture(validUser.profilePicture())
+                .build();
+        User savedUser = User.builder()
+                .id(1L)
+                .email(validUser.email())
+                .password("encoded_password")
+                .roles(validUser.roles())
+                .fullName(validUser.fullName())
+                .phoneNumber(validUser.phoneNumber())
+                .birthDate(validUser.birthDate())
+                .profilePicture(validUser.profilePicture())
+                .build();
+        UserSignupResponseDTO responseDTO = new UserSignupResponseDTO(
+                savedUser.getEmail(),
+                savedUser.getPassword(),
+                savedUser.getRoles(),
+                savedUser.getFullName(),
+                savedUser.getPhoneNumber(),
+                savedUser.getBirthDate(),
+                savedUser.getProfilePicture()
+        );
+
+        when(userMapper.toEntity(validUser)).thenReturn(mappedUser);
+        when(passwordEncoder.encode(validUser.password())).thenReturn("encoded_password");
+        when(userRepository.save(mappedUser)).thenReturn(savedUser);
+        when(userMapper.toSignupResponseDTO(savedUser)).thenReturn(responseDTO);
+
+        UserSignupResponseDTO result = userService.registerUser(validUser);
+
+        assertThat(result).isNotNull();
+        assertThat(result.email()).isEqualTo(validUser.email());
+        assertThat(result.roles()).containsExactly(Role.GUEST);
+
+        verify(userRepository, times(1)).save(any(User.class));
+    }
+
+    @Test
+    void registerUser_ValidHostRole_ReturnsUserSignupResponseDTO() {
+        UserSignupRequestDTO validUser = new UserSignupRequestDTO(
+                "hostuser@gmail.com",
+                "ValidPassword1",
+                Set.of(Role.HOST),
+                "Host User",
+                "+573103203050",
+                LocalDate.of(1994, 8, 20),
+                "https://valid-image-url.com/host.jpg");
+
+        when(userRepository.findByEmail(validUser.email())).thenReturn(Optional.empty());
+        User mappedUser = User.builder()
+                .email(validUser.email())
+                .password(validUser.password())
+                .roles(validUser.roles())
+                .fullName(validUser.fullName())
+                .phoneNumber(validUser.phoneNumber())
+                .birthDate(validUser.birthDate())
+                .profilePicture(validUser.profilePicture())
+                .build();
+        User savedUser = User.builder()
+                .id(2L)
+                .email(validUser.email())
+                .password("encoded_password")
+                .roles(validUser.roles())
+                .fullName(validUser.fullName())
+                .phoneNumber(validUser.phoneNumber())
+                .birthDate(validUser.birthDate())
+                .profilePicture(validUser.profilePicture())
+                .build();
+        UserSignupResponseDTO responseDTO = new UserSignupResponseDTO(
+                savedUser.getEmail(),
+                savedUser.getPassword(),
+                savedUser.getRoles(),
+                savedUser.getFullName(),
+                savedUser.getPhoneNumber(),
+                savedUser.getBirthDate(),
+                savedUser.getProfilePicture()
+        );
+
+        when(userMapper.toEntity(validUser)).thenReturn(mappedUser);
+        when(passwordEncoder.encode(validUser.password())).thenReturn("encoded_password");
+        when(userRepository.save(mappedUser)).thenReturn(savedUser);
+        when(userMapper.toSignupResponseDTO(savedUser)).thenReturn(responseDTO);
+
+        UserSignupResponseDTO result = userService.registerUser(validUser);
+
+        assertThat(result).isNotNull();
+        assertThat(result.email()).isEqualTo(validUser.email());
+        assertThat(result.roles()).containsExactly(Role.HOST);
+
+        verify(userRepository, times(1)).save(any(User.class));
+    }
+
+    @Test
+    void registerUser_ValidGuestAndHostRoles_ReturnsUserSignupResponseDTO() {
+        UserSignupRequestDTO validUser = new UserSignupRequestDTO(
+                "dualrole@gmail.com",
+                "ValidPassword1",
+                Set.of(Role.GUEST, Role.HOST),
+                "Dual Role User",
+                "+573203203050",
+                LocalDate.of(1992, 3, 15),
+                "https://valid-image-url.com/dual.jpg");
+
+        when(userRepository.findByEmail(validUser.email())).thenReturn(Optional.empty());
+        User mappedUser = User.builder()
+                .email(validUser.email())
+                .password(validUser.password())
+                .roles(validUser.roles())
+                .fullName(validUser.fullName())
+                .phoneNumber(validUser.phoneNumber())
+                .birthDate(validUser.birthDate())
+                .profilePicture(validUser.profilePicture())
+                .build();
+        User savedUser = User.builder()
+                .id(3L)
+                .email(validUser.email())
+                .password("encoded_password")
+                .roles(validUser.roles())
+                .fullName(validUser.fullName())
+                .phoneNumber(validUser.phoneNumber())
+                .birthDate(validUser.birthDate())
+                .profilePicture(validUser.profilePicture())
+                .build();
+        UserSignupResponseDTO responseDTO = new UserSignupResponseDTO(
+                savedUser.getEmail(),
+                savedUser.getPassword(),
+                savedUser.getRoles(),
+                savedUser.getFullName(),
+                savedUser.getPhoneNumber(),
+                savedUser.getBirthDate(),
+                savedUser.getProfilePicture()
+        );
+
+        when(userMapper.toEntity(validUser)).thenReturn(mappedUser);
+        when(passwordEncoder.encode(validUser.password())).thenReturn("encoded_password");
+        when(userRepository.save(mappedUser)).thenReturn(savedUser);
+        when(userMapper.toSignupResponseDTO(savedUser)).thenReturn(responseDTO);
+
+        UserSignupResponseDTO result = userService.registerUser(validUser);
+
+        assertThat(result).isNotNull();
+        assertThat(result.email()).isEqualTo(validUser.email());
+        assertThat(result.roles()).containsExactlyInAnyOrder(Role.GUEST, Role.HOST);
+
+        verify(userRepository, times(1)).save(any(User.class));
     }
 }

@@ -7,7 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import java.time.LocalDateTime;
 
 /**
- * Request body used by guests to update the date range of an active
+ * Request the body used by guests to update the date range of an active
  * reservation.
  *
  * @param startDate New check-in date and time.

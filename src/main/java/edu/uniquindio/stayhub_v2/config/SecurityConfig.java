@@ -149,6 +149,9 @@ public class SecurityConfig {
                         // Public access to authentication endpoints
                         .requestMatchers("/api/v2/users/auth/**").permitAll()
 
+                        // Admin-only endpoints
+                        .requestMatchers("/api/v2/admin-actions/**").hasRole("ADMIN")
+
                         // All other endpoints require authentication
                         .anyRequest().authenticated()
                 )
